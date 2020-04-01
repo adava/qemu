@@ -186,7 +186,12 @@ static inline void plugin_gen_empty_callback(enum plugin_gen_from from)
     case PLUGIN_GEN_AFTER_INSN:
         gen_wrapped(from, PLUGIN_GEN_DISABLE_MEM_HELPER,
                     gen_empty_mem_helper);
-        break;
+#ifdef SINA_PLUGIN_AFTER //sina
+        gen_wrapped(from, PLUGIN_GEN_CB_UDATA, gen_empty_udata_cb);
+#else
+        g_assert_not_reached();
+#endif
+            break;
     case PLUGIN_GEN_FROM_INSN:
         /*
          * Note: plugin_gen_inject() relies on ENABLE_MEM_HELPER being
@@ -686,6 +691,16 @@ static void plugin_gen_insn_udata(const struct qemu_plugin_tb *ptb,
     inject_udata_cb(insn->cbs[PLUGIN_CB_INSN][PLUGIN_CB_REGULAR], begin_op);
 }
 
+#ifdef SINA_PLUGIN_AFTER
+static void plugin_gen_after_insn_udata(const struct qemu_plugin_tb *ptb,
+                                  TCGOp *begin_op, int insn_idx)
+{
+    struct qemu_plugin_insn *insn = g_ptr_array_index(ptb->insns, insn_idx);
+
+    inject_udata_cb(insn->cbs[PLUGIN_CB_AFTERI][PLUGIN_CB_REGULAR], begin_op);
+}
+#endif
+
 static void plugin_gen_insn_inline(const struct qemu_plugin_tb *ptb,
                                    TCGOp *begin_op, int insn_idx)
 {
@@ -773,6 +788,11 @@ static void plugin_inject_cb(const struct qemu_plugin_tb *ptb, TCGOp *begin_op,
         case PLUGIN_GEN_DISABLE_MEM_HELPER:
             plugin_gen_disable_mem_helper(ptb, begin_op, insn_idx);
             return;
+#ifdef SINA_PLUGIN_AFTER
+        case PLUGIN_GEN_CB_UDATA:
+            plugin_gen_after_insn_udata(ptb, begin_op, insn_idx);
+            return;
+#endif
         default:
             g_assert_not_reached();
         }

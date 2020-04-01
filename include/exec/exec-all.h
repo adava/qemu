@@ -20,6 +20,8 @@
 #ifndef EXEC_ALL_H
 #define EXEC_ALL_H
 
+#define SINA_PLUGIN_AFTER //sina
+
 #include "cpu.h"
 #include "exec/tb-context.h"
 #ifdef CONFIG_TCG

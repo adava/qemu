@@ -308,10 +308,10 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 qemu_plugin_register_vcpu_insn_exec_inline(
                     insn, QEMU_PLUGIN_INLINE_ADD_U64, cnt, 1);
             } else {
-                qemu_plugin_register_vcpu_insn_exec_cb(
-                    insn, vcpu_insn_exec_before, QEMU_PLUGIN_CB_NO_REGS, cnt);
-//                qemu_plugin_register_vcpu_after_insn_exec_cb(
-//                        insn, vcpu_insn_exec_before, QEMU_PLUGIN_CB_NO_REGS, cnt);
+//                qemu_plugin_register_vcpu_insn_exec_cb(
+//                    insn, vcpu_insn_exec_before, QEMU_PLUGIN_CB_NO_REGS, cnt);
+                qemu_plugin_register_vcpu_after_insn_exec_cb(
+                        insn, vcpu_insn_exec_before, QEMU_PLUGIN_CB_NO_REGS, cnt);
             }
         }
     }

@@ -13,6 +13,8 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
+#define SINA_PLUGIN_AFTER //sina
+
 /*
  * For best performance, build the plugin with -fvisibility=hidden so that
  * QEMU_PLUGIN_LOCAL is implicit. Then, just mark qemu_plugin_install with
@@ -262,6 +264,21 @@ void qemu_plugin_register_vcpu_insn_exec_cb(struct qemu_plugin_insn *insn,
                                             qemu_plugin_vcpu_udata_cb_t cb,
                                             enum qemu_plugin_cb_flags flags,
                                             void *userdata);
+
+/**
+ * qemu_plugin_register_vcpu_after_insn_exec_cb() - register insn execution cb
+ * @insn: the opaque qemu_plugin_insn handle for an instruction
+ * @cb: callback function
+ * @flags: does the plugin read or write the CPU's registers?
+ * @userdata: any plugin data to pass to the @cb?
+ *
+ * The @cb function is called *after* an instruction is executed
+ */
+void qemu_plugin_register_vcpu_after_insn_exec_cb(struct qemu_plugin_insn *insn,
+                                            qemu_plugin_vcpu_udata_cb_t cb,
+                                            enum qemu_plugin_cb_flags flags,
+                                            void *userdata);
+
 
 /**
  * qemu_plugin_register_vcpu_insn_exec_inline() - insn execution inline op
