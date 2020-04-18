@@ -16,6 +16,8 @@ void monitor_disas(Monitor *mon, CPUState *cpu,
 
 char *plugin_disas(CPUState *cpu, uint64_t addr, size_t size);
 
+char *structured_plugin_disas(CPUState *cpu, uint64_t addr, size_t size, void **structure_ptr);
+
 /* Look up symbol for debugging purpose.  Returns "" if unknown. */
 const char *lookup_symbol(target_ulong orig_addr);
 #endif

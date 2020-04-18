@@ -478,6 +478,8 @@ void target_disas(FILE *out, CPUState *cpu, target_ulong code,
 
 static __thread GString plugin_disas_output;
 
+static __thread cs_insn *plugin_disas_result; //sina
+
 static int plugin_printf(FILE *stream, const char *fmt, ...)
 {
     va_list va;
@@ -514,11 +516,14 @@ bool cap_disas_plugin(disassemble_info *info, uint64_t pc, size_t size)
     }
     insn = cap_insn;
 
+    cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
+
     size_t tsize = MIN(sizeof(cap_buf) - csize, size);
     const uint8_t *cbuf = cap_buf;
     target_read_memory(pc, cap_buf, tsize, info);
 
-    count = cs_disasm(handle, cbuf, size, 0, 1, &insn);
+    count = cs_disasm(handle, cbuf, size, 0, 1, &insn);//sina
+    plugin_disas_result = insn;//sina
 
     if (count) {
         g_string_printf(s, "%s %s", insn->mnemonic, insn->op_str);
@@ -584,6 +589,16 @@ char *plugin_disas(CPUState *cpu, uint64_t addr, size_t size)
 
     return g_strdup(ds->str);
 }
+
+#ifdef CONFIG_CAPSTONE
+char *structured_plugin_disas(CPUState *cpu, uint64_t addr, size_t size, void **structure_ptr){ //sina
+
+    char *temp = plugin_disas(cpu, addr, size);
+    //structure_ptr = malloc(sizeof(cs_insn)); //sina: we would have to copy a rather complex and multi-layer data strucrture
+    *structure_ptr = (void *)plugin_disas_result;
+    return temp;
+}
+#endif
 
 /* Disassemble this for me please... (debugging). */
 void disas(FILE *out, void *code, unsigned long size)

@@ -78,6 +78,9 @@ union qemu_plugin_cb_sig {
 enum plugin_dyn_cb_type {
     PLUGIN_CB_INSN,
     PLUGIN_CB_MEM,
+#ifdef SINA_PLUGIN_AFTER
+    PLUGIN_CB_AFTERI,
+#endif
     PLUGIN_N_CB_TYPES,
 };
 

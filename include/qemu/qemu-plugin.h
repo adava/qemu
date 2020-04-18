@@ -7,6 +7,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
+#define CONFIG_TAINT_ANALYSIS
+
 #ifndef QEMU_PLUGIN_API_H
 #define QEMU_PLUGIN_API_H
 
@@ -395,6 +397,27 @@ qemu_plugin_register_vcpu_syscall_ret_cb(qemu_plugin_id_t id,
  */
 
 char *qemu_plugin_insn_disas(const struct qemu_plugin_insn *insn);
+
+/**
+ * cap_plugin_insn_disas() - return disassembly cs_insn structure of capstone for instruction
+ * @insn: instruction reference
+ *
+ * Returns cs_insn struct containing the capstone disassembly result
+ */
+
+#ifdef CONFIG_TAINT_ANALYSIS
+void *cap_plugin_insn_disas(const struct qemu_plugin_insn *insn);
+
+/**
+ * plugin_mem_read() - fills buf with the target vaddr memory data
+ * @vaddr: target virtual address (as seen in the disass or from the memory handler callback)
+ * @buf: the buffer pointer to be filled with the data
+ * @len: bytes to read
+ *
+ * Return value would be in buf
+ */
+void plugin_mem_read(uint64_t vaddr, int len, void *buf);
+#endif
 
 /**
  * qemu_plugin_vcpu_for_each() - iterate over the existing vCPU

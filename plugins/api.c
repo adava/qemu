@@ -34,6 +34,9 @@
  *
  */
 
+#define CONFIG_TAINT_ANALYSIS
+
+
 #include "qemu/osdep.h"
 #include "qemu/plugin.h"
 #include "cpu.h"
@@ -49,6 +52,9 @@
 #include "trace/mem.h"
 
 /* Uninstall and Reset handlers */
+#ifdef CONFIG_TAINT_ANALYSIS
+void plugin_mem_rw(CPUState* env, uint64_t addr, void *buf, int len, int is_write);
+#endif
 
 void qemu_plugin_uninstall(qemu_plugin_id_t id, qemu_plugin_simple_cb_t cb)
 {
@@ -229,6 +235,28 @@ char *qemu_plugin_insn_disas(const struct qemu_plugin_insn *insn)
     return plugin_disas(cpu, insn->vaddr, insn->data->len);
 }
 
+#ifdef CONFIG_TAINT_ANALYSIS
+
+void plugin_mem_rw(CPUState* env, uint64_t addr, void *buf, int len, int is_write) {
+    cpu_memory_rw_debug(env, addr, buf, len, is_write);
+}
+
+
+void *cap_plugin_insn_disas(const struct qemu_plugin_insn *insn)
+{
+    CPUState *cpu = current_cpu;
+    void *structure_ptr;
+//    char *temp = structured_plugin_disas(cpu, insn->vaddr, insn->data->len, &structure_ptr);
+    structured_plugin_disas(cpu, insn->vaddr, insn->data->len, &structure_ptr);
+    return structure_ptr;
+}
+
+void plugin_mem_read(uint64_t vaddr, int len, void *buf)
+{
+    CPUState *cpu = current_cpu;
+    plugin_mem_rw(cpu,vaddr,buf,len,0);
+}
+#endif
 /*
  * The memory queries allow the plugin to query information about a
  * memory access.
