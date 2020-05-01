@@ -17,8 +17,9 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <glib.h>
-
 #include <qemu-plugin.h>
+
+#include <capstone.h>
 
 QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
@@ -153,6 +154,18 @@ static ClassSelector class_tables[] =
     { NULL, default_insn_classes, ARRAY_SIZE(default_insn_classes) },
 };
 
+static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
+                     uint64_t vaddr, void *udata)
+{
+    uint64_t s1 =0;
+    uint64_t buf =0;
+    uint64_t s2 =0;
+    plugin_mem_read(vaddr,sizeof(uint64_t),&buf);
+    plugin_mem_read(vaddr,sizeof(uint64_t),&buf);
+    g_autofree gchar *out = g_strdup_printf("#op_mem callback#\toperands: %s, addr: 0x%lx, value=%"PRIu64", s1=%"PRIu64", s2=%"PRIu64"\n", (char*)udata, vaddr,buf,s1,s2);
+    qemu_plugin_outs(out);
+}
+
 static InsnClassExecCount *class_table;
 static int class_table_sz;
 
@@ -235,62 +248,77 @@ static void vcpu_insn_exec_before(unsigned int cpu_index, void *udata)
     (*count)++;
 }
 
+static void syscall_callback(qemu_plugin_id_t id, unsigned int vcpu_index,
+                                 int64_t num, uint64_t a1, uint64_t a2,
+                                 uint64_t a3, uint64_t a4, uint64_t a5,
+                                 uint64_t a6, uint64_t a7, uint64_t a8)
+{
+    g_autofree gchar *out = g_strdup_printf(
+    "******system call callback*******\tnum: %" PRIu64", a1: %" PRIu64" , a2: %" PRIu64" , a3: %" PRIu64 "\n",
+            num, a1,a2,a3);
+    qemu_plugin_outs(out);
+}
+
+static char *get_type(char* op){
+    int i = 0;
+    while (op[i++]==' ');
+    char *operand = &op[i-1];
+    switch(operand[0]){
+        case '$':
+            return strdup("imm");
+        case '%':
+            return strdup("reg");
+        default:
+            return strdup("mem");
+    }
+}
+
 static uint64_t * find_counter(struct qemu_plugin_insn *insn)
 {
-    int i;
-    uint64_t *cnt = NULL;
+    int i = 0;
     uint32_t opcode;
-    InsnClassExecCount *class = NULL;
+    char *ops[3];
 
-    /*
-     * We only match the first 32 bits of the instruction which is
-     * fine for most RISCs but a bit limiting for CISC architectures.
-     * They would probably benefit from a more tailored plugin.
-     * However we can fall back to individual instruction counting.
-     */
     opcode = *((uint32_t *)qemu_plugin_insn_data(insn));
+    char *i_dis = qemu_plugin_insn_disas(insn);
+    cs_insn *cs_ptr = (cs_insn*)cap_plugin_insn_disas(insn);
+    char *ins_copy = strdup(i_dis);
+    char* token = strtok(ins_copy, " ");
 
-    for (i = 0; !cnt && i < class_table_sz; i++) {
-        class = &class_table[i];
-        uint32_t masked_bits = opcode & class->mask;
-        if (masked_bits == class->pattern) {
+    // Keep separating tokens
+
+    while (token != NULL && i<3) {
+        ops[i++] = token;
+        //printf("%s\n", token);
+        token = strtok(NULL, ",");
+    }
+    //print somehow
+    g_mutex_lock(&lock);
+    InsnExecCount *icount = g_new0(InsnExecCount, 1);
+    icount->opcode = opcode;
+//    icount->insn = g_strdup_printf("opcode: %s, op1: %s , op2: %s\n",
+//            ops[0], ops[1],ops[2]);
+    g_autofree gchar *d_str;
+    switch(i){
+        case 1:
+            d_str = g_strdup_printf("opcode: %s\n", ops[0]);
             break;
-        }
+        case 2:
+            d_str = g_strdup_printf("opcode: %s, op1: %s \n", ops[0], get_type(ops[1]));
+            break;
+        case 3:
+            d_str = g_strdup_printf("opcode: %s, op1: %s (%s), op2: %s (%s)\n", ops[0], ops[1], get_type(ops[1]), ops[2], get_type(ops[2]));
+            break;
+        default:
+            g_assert_not_reached();
     }
-
-    g_assert(class);
-
-    switch (class->what) {
-    case COUNT_NONE:
-        return NULL;
-    case COUNT_CLASS:
-        return &class->count;
-    case COUNT_INDIVIDUAL:
-    {
-        InsnExecCount *icount;
-
-        g_mutex_lock(&lock);
-        icount = (InsnExecCount *) g_hash_table_lookup(insns,
-                                                       GUINT_TO_POINTER(opcode));
-
-        if (!icount) {
-            icount = g_new0(InsnExecCount, 1);
-            icount->opcode = opcode;
-            icount->insn = qemu_plugin_insn_disas(insn);
-            icount->class = class;
-
-            g_hash_table_insert(insns, GUINT_TO_POINTER(opcode),
-                                (gpointer) icount);
-        }
-        g_mutex_unlock(&lock);
-
-        return &icount->count;
-    }
-    default:
-        g_assert_not_reached();
-    }
-
-    return NULL;
+    g_autofree gchar *cs_str=g_strdup_printf("cs_insn: ptr=%p, id=%u, cmd=%s\t groups=%u, groups=%u\n", (void *)cs_ptr,cs_ptr->id,cs_ptr->mnemonic,cs_ptr->detail->groups_count,cs_ptr->detail->groups[0]);
+    qemu_plugin_outs(d_str);
+    qemu_plugin_outs(cs_str);
+    icount->insn = i_dis;
+    g_hash_table_insert(insns, GUINT_TO_POINTER(opcode), (gpointer) icount);
+    g_mutex_unlock(&lock);
+    return &icount->count;
 }
 
 static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
@@ -299,22 +327,17 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
     size_t i;
 
     for (i = 0; i < n; i++) {
-        uint64_t *cnt;
+        uint64_t *cnt = 0;
         struct qemu_plugin_insn *insn = qemu_plugin_tb_get_insn(tb, i);
+        char *i_dis = qemu_plugin_insn_disas(insn);
+        char * usr_data = strdup(i_dis);
+        qemu_plugin_register_vcpu_mem_cb(insn, op_mem,
+                                         QEMU_PLUGIN_CB_NO_REGS,
+                                         QEMU_PLUGIN_MEM_R, usr_data);
         cnt = find_counter(insn);
-
-        if (cnt) {
-            if (do_inline) {
-                qemu_plugin_register_vcpu_insn_exec_inline(
-                    insn, QEMU_PLUGIN_INLINE_ADD_U64, cnt, 1);
-            } else {
-//                qemu_plugin_register_vcpu_insn_exec_cb(
-//                    insn, vcpu_insn_exec_before, QEMU_PLUGIN_CB_NO_REGS, cnt);
-                qemu_plugin_register_vcpu_after_insn_exec_cb(
-                        insn, vcpu_insn_exec_before, QEMU_PLUGIN_CB_NO_REGS, cnt);
-            }
+        qemu_plugin_register_vcpu_after_insn_exec_cb(
+                insn, vcpu_insn_exec_before, QEMU_PLUGIN_CB_NO_REGS, cnt);
         }
-    }
 }
 
 QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
@@ -360,5 +383,6 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
 
     qemu_plugin_register_vcpu_tb_trans_cb(id, vcpu_tb_trans);
     qemu_plugin_register_atexit_cb(id, plugin_exit, NULL);
+    qemu_plugin_register_vcpu_syscall_cb(id, syscall_callback);
     return 0;
 }

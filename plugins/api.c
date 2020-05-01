@@ -256,6 +256,40 @@ void plugin_mem_read(uint64_t vaddr, int len, void *buf)
     CPUState *cpu = current_cpu;
     plugin_mem_rw(cpu,vaddr,buf,len,0);
 }
+
+void plugin_reg_read(uint32_t reg, int len, void *buf)
+{
+    uint32_t qreg = reg;
+    uint8_t shift = 0;
+    uint64_t value =0 ;
+#ifdef TARGET_X86_64
+    CPUX86State *cpu = (CPUX86State*)current_cpu;
+    if (qreg>15){ //high parts of the general registers see i386/translate and access to AH for an example
+        qreg -=15;
+        shift = 1;
+    }
+    value = cpu->regs[qreg];
+#endif
+    if (shift){
+        value = value > 32;
+    }
+    switch(len){
+        case 1:
+            *(uint8_t*)buf = value & 0xff;
+            break;
+        case 2:
+            *(uint16_t*)buf = value & 0xffff;
+            break;
+        case 4:
+            *(uint32_t*)buf = value & 0xffffffff;
+            break;
+        case 8:
+            *(uint64_t*)buf = value;
+            break;
+        default:
+            assert(0);
+    }
+}
 #endif
 /*
  * The memory queries allow the plugin to query information about a

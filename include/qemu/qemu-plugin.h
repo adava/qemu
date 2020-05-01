@@ -398,6 +398,8 @@ qemu_plugin_register_vcpu_syscall_ret_cb(qemu_plugin_id_t id,
 
 char *qemu_plugin_insn_disas(const struct qemu_plugin_insn *insn);
 
+#ifdef CONFIG_TAINT_ANALYSIS
+
 /**
  * cap_plugin_insn_disas() - return disassembly cs_insn structure of capstone for instruction
  * @insn: instruction reference
@@ -405,7 +407,6 @@ char *qemu_plugin_insn_disas(const struct qemu_plugin_insn *insn);
  * Returns cs_insn struct containing the capstone disassembly result
  */
 
-#ifdef CONFIG_TAINT_ANALYSIS
 void *cap_plugin_insn_disas(const struct qemu_plugin_insn *insn);
 
 /**
@@ -417,6 +418,16 @@ void *cap_plugin_insn_disas(const struct qemu_plugin_insn *insn);
  * Return value would be in buf
  */
 void plugin_mem_read(uint64_t vaddr, int len, void *buf);
+
+/**
+ * plugin_reg_read() - fills buf with the target register data
+ * @id: the Qemu known register ID except for high parts. See utility.c, and invoke MAP_X86_REGISTER macro to map Capstone register ID to a valid one
+ * @buf: the buffer pointer to be filled with the data
+ * @len: bytes to read
+ *
+ * Return value would be in buf
+ */
+void plugin_reg_read(uint32_t id, int len, void *buf);
 #endif
 
 /**

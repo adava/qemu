@@ -13,10 +13,11 @@ NAMES += mem
 NAMES += hotblocks
 NAMES += howvec
 NAMES += hotpages
+NAMES += taint
 
 SONAMES := $(addsuffix .so,$(addprefix lib,$(NAMES)))
 
-QEMU_CFLAGS += -fPIC
+QEMU_CFLAGS += -fPIC -Wno-unused-but-set-variable -Wno-unused-function
 QEMU_CFLAGS += -I$(SRC_PATH)/include/qemu
 
 all: $(SONAMES)
