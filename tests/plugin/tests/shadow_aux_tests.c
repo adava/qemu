@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <glib.h>
+#include <stdint.h>
 #include "../lib/shadow_memory.c"
 
 void test_conversion(){
@@ -31,10 +32,47 @@ void test_global_get_set(){
 }
 
 void test_offsets(){
-    SHD_value shd2 = 0x10000fff5;
-    SHD_value of1=SHD_find_offset(shd2);
-    SHD_value p1=SHD_find_page_addr(shd2);
-    printf("testing SHD_find_offset, SHD_find_page_addr: of1=%llx, p1=%llx\ns, shd2=%llx\n",of1,p1,shd2);
+    SHD_value addr1 = 0x8004;
+    SHD_value of1=SHD_find_offset(SHD_PAGE_INDEX(addr1));
+    SHD_value p1=SHD_find_page_addr(SHD_PAGE_INDEX(addr1));
+
+    SHD_value addr2 = 0x800e;
+    SHD_value of2=SHD_find_offset(SHD_PAGE_INDEX(addr2));
+    SHD_value p2=SHD_find_page_addr(SHD_PAGE_INDEX(addr2));
+
+    printf("testing SHD_find_offset, SHD_find_page_addr: addr1=%llx, of1=%llx, p1=%llx\taddr2=%llx, of2=%llx, p2=%llx \n",
+           addr1, of1, p1, addr2, of2, p2);
+}
+
+void test_find_page(){
+    SHD_init();
+    uint64_t u64_f1 = 0xfff1;
+    uint64_t u64_f5 = 0x10000fff5;
+    SHD_value of1=SHD_find_offset(u64_f1);
+    SHD_value p1=SHD_find_page_addr(SHD_PAGE_INDEX(u64_f1));
+    SHD_value p2=SHD_find_page_addr(SHD_PAGE_INDEX(u64_f5));
+
+    assert(p1==p2);
+
+    set_memory_shadow(u64_f1, sizeof(u64_f1),&u64_f1);
+    set_memory_shadow(u64_f5, sizeof(u64_f1),&u64_f1);
+    shadow_page *t1=find_shadow_page(u64_f1);
+    shadow_page *t2=find_shadow_page(u64_f5);
+//    printf("testing set_memory_shadow, get_shadow_memory:t1=%p, t2=%p  of1=%llx, p1=%llx u64_f1=%llx\t p2=%llx, u64_f5=%llx, mask=0x%x\n",t1,t2,of1,p1,u64_f1,p2,u64_f5,PAGE_MASK);
+    printf("testing find_shadow_page phase(1): addr1=%llx, of1=%llx, p1=%llx, page_ptr1=0x%p\taddr2=%llx, p2=%llx, page_ptr2=0x%p \n",
+           u64_f1, of1, p1,t1, u64_f5, p2,t2);
+    assert(t1!=t2); //although the keys would give the same hash, the pages pointers should still be different.
+
+    uint64_t addr3 = 0x8004;
+    uint64_t addr4 = 0x800e;
+
+    set_memory_shadow(addr3, sizeof(u64_f1),&u64_f1);
+    set_memory_shadow(addr4, sizeof(u64_f1),&u64_f1);
+    shadow_page *t3=find_shadow_page(addr3);
+    shadow_page *t4=find_shadow_page(addr4);
+    assert(t3==t4);
+    printf("testing find_shadow_page phase(2): addr3=%llx, page_ptr3=0x%p\taddr4=%llx, page_ptr4=0x%p \n",
+           addr3, t3, addr4, t4);
 }
 
 void test_sh_mem(){
@@ -45,17 +83,10 @@ void test_sh_mem(){
     SHD_value p1=SHD_find_page_addr(u64_f1);
     SHD_value p2=SHD_find_page_addr(u64_f5);
 
-    assert(p1==p2);
-
     uint16_t u16_1f=0x8fff;
     uint32_t u32_6=0x6;
     set_memory_shadow(u64_f1, sizeof(u16_1f),&u16_1f);
     set_memory_shadow(u64_f5, sizeof(u32_6),&u32_6);
-
-    shadow_page *t1=find_shadow_page(u64_f1);
-    shadow_page *t2=find_shadow_page(u64_f5);
-//    printf("testing set_memory_shadow, get_shadow_memory:t1=%p, t2=%p  of1=%llx, p1=%llx u64_f1=%llx\t p2=%llx, u64_f5=%llx, mask=0x%x\n",t1,t2,of1,p1,u64_f1,p2,u64_f5,PAGE_MASK);
-    assert(t1!=t2); //although the keys would give the same hash, the pages pointers should still be different.
 
     void *sh_mem = get_shadow_memory(u64_f1);
     assert(sh_mem!=NULL);
@@ -113,12 +144,32 @@ void test_SHD_get_set(){
     printf("SUCCESS testing SHD_set_shadow and SHD_get_shadow: id1=%d, id2=%d, sh1=%llu, sh2=%llu, vaddr=%llu, vaddr_shd=%x\n",inq1.addr.id,inq2.addr.id,g_sh1,g_sh2,u64_84,u16_1f);
 }
 
+
+void test_write(){
+    SHD_init();
+    uint64_t u64_84 = 0x8004;
+    uint8_t u8_f = 0xff;
+    uint32_t size = 0xff2;
+    shadow_err er = write_memory_shadow(u64_84,size,u8_f);
+    assert(er==0);
+
+    shadow_err er2 = write_memory_shadow(u64_84,2*size,u8_f);
+    assert(er2==1);
+
+    shad_inq inq1 = {.addr.vaddr=0x800e,.type=MEMORY, .size=SHD_SIZE_u64};
+    SHD_value sh1 = SHD_get_shadow(inq1);
+    assert(sh1==-1);
+    printf("SUCCESS testing write_memory_shadow: writing %d bytes to %llx  vaddr=0x%llx, shadow_value=0x%llx\n",size,u64_84,inq1.addr.vaddr,sh1);
+}
+
 int main(){
     test_conversion();
     test_global_get_set();
     test_offsets();
+    test_find_page();
     test_sh_mem();
     test_sh_temp();
     test_SHD_get_set();
+    test_write();
     return 0;
 }

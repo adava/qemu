@@ -141,10 +141,17 @@ static void syscall_callback(qemu_plugin_id_t id, unsigned int vcpu_index,
                                  uint64_t a3, uint64_t a4, uint64_t a5,
                                  uint64_t a6, uint64_t a7, uint64_t a8)
 {
-    g_autofree gchar *out = g_strdup_printf(
-    "******system call callback*******\tnum: %" PRIu64", a1: %" PRIu64" , a2: %" PRIu64" , a3: %" PRIu64 "\n",
-            num, a1,a2,a3);
-    qemu_plugin_outs(out);
+    g_autoptr(GString) out = g_string_new("******system call*******");
+    g_string_append_printf(out,"\tnum: %"PRIu64"\n", num);
+    // For read system call, num==0, a2 holds the buffer address (to which the read bytes are written) and a3 holds the number of read bytes.
+    if(num==0){
+        uint8_t value = 0xff;
+        SHD_write_contiguous(a2, a3,value);
+        g_string_append_printf(out,"TAINTING SOURCE\t a1: %" PRIu64" , source addr: 0x%lx , len: %" PRIu64 "\n",
+                a1,a2,a3);
+    }
+
+    qemu_plugin_outs(out->str);
 }
 
 static void nice_print(cs_insn *insn)

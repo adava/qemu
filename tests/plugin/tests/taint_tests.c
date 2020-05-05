@@ -7,16 +7,16 @@
 #include <stdio.h>
 #include <string.h>
 #include <glib.h>
+#include <stdint.h>
 #include "../lib/shadow_memory.c"
 #include "../lib/taint_propagation.c"
 
 void MEM_read(uint64_t vaddr, int len, uint8_t *buf){
-
     if (len==1) {
         if (vaddr > 0xffff) {
-            buf[0] = op_v1;
+            buf[0] = 0x70;
         } else {
-            buf[0] = op_v2;
+            buf[0] = 0x7c;
         }
     }
 }
@@ -203,12 +203,12 @@ void test_Shift_Rotation(){
 
     shad_inq inq2={.addr=rotate_size1,.type=IMMEDIATE,.size=SHD_SIZE_u16};
 
-    SHD_Shift_Rotation(&inq1,inq2,Rol);
+    SHD_Shift_Rotation(inq2,&inq1,Rol);
     SHD_value t1 = SHD_get_shadow(inq1);
     assert(t1==0xfff500000001);
     shad_inq inq3={.addr=3,.type=GLOBAL,.size=SHD_SIZE_u16};
     SHD_set_shadow(&inq3,&rotate_shd);
-    SHD_Shift_Rotation(&inq1,inq3,Rol);//not analyzed
+    SHD_Shift_Rotation(inq3,&inq1,Rol);//not analyzed
     SHD_value t2 = SHD_get_shadow(inq1);
     printf("SUCCESS testing SHD_Shift_Rotation Rol(0x%llx,imm/tainted_reg=0x%u)=0x%llx\t0x%llx\n",d1,rotate_size1,t1,t2);
 }
@@ -234,7 +234,27 @@ void test_copy_conservative(){
     printf("SUCCESS testing SHD_copy_conservative: copying 0x%x to flag %d =>0x%llx, and to register %d =>0x%llx\n",d1,flag_id,t1,inq3.addr.id,t2);
 }
 
-int main(){
+void test_write_contiguous() {
+    SHD_init();
+    uint64_t u64_84 = 0x8004;
+    uint8_t u8_f = 0xff;
+    uint32_t size = 0x1fe4;
+    shadow_err er2 = SHD_write_contiguous(u64_84, size, u8_f);
+    assert(er2 == 0);
+
+    shad_inq inq1 = {.addr.vaddr=0x900e, .type=MEMORY, .size=SHD_SIZE_u64};
+    SHD_value sh1 = SHD_get_shadow(inq1);
+
+    shad_inq inq2 = {.addr.vaddr=0x800e, .type=MEMORY, .size=SHD_SIZE_u64};
+    SHD_value sh2 = SHD_get_shadow(inq2);
+
+    shad_inq inq3 = {.addr.vaddr=0xa00e, .type=MEMORY, .size=SHD_SIZE_u64};
+    SHD_value sh3 = SHD_get_shadow(inq3);
+    printf("SUCCESS testing SHD_write_contiguous, writing %d bytes to 0x%llx: vaddr=0x%llx -> value=0x%llx\tvaddr=0x%llx -> value=0x%llx\tvaddr=0x%llx -> value=0x%llx\n",
+           size, u64_84, inq1.addr.vaddr, sh1, inq2.addr.vaddr, sh2, inq3.addr.vaddr, sh3);
+}
+
+int main() {
     test_clear();
     test_copy();
     test_add_sub();
@@ -247,6 +267,6 @@ int main(){
     test_cast();
     test_Shift_Rotation();
     test_copy_conservative();
+    test_write_contiguous();
     return 0;
 }
-

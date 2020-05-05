@@ -27,7 +27,7 @@ void SHD_initialize_globals(void);
 guint SHD_ghash_addr(gconstpointer key){
     uint64_t h = (uint64_t)key;
     h = SHD_find_page_addr(h);
-//    printf("in SHD_ghash_addr, h=%llx\n",h);
+//  printf("in SHD_ghash_addr, key=%llx, h=%llx\n",(uint64_t)key,h);
     return ((guint)h);
 }
 
@@ -132,13 +132,33 @@ shadow_err set_global_shadow(int id, uint8_t size, void *value){
     return 0;
 }
 
-shadow_err set_memory_shadow(uint64_t vaddr, uint8_t size, void *value){
+shadow_err set_memory_shadow(uint64_t vaddr, uint8_t size, void *value){ //should check the size would not surpass a page
     shadow_page *page = find_shadow_page(vaddr);
     if (page==NULL){
         page = g_new0(shadow_page,1);
-        g_hash_table_insert (SHD_Memory.pages,(gpointer)(vaddr),page);
+        g_hash_table_insert(SHD_Memory.pages,(gpointer)(SHD_KEY_CONVERSION(vaddr)),page);
     }
     memcpy(&(page->bitmap[SHD_find_offset(vaddr)]),value,size);
+    return 0;
+}
+
+//bulk copy
+shadow_err write_memory_shadow(uint64_t vaddr, uint32_t size, uint8_t value){ //check the size
+    uint64_t page_bound = (vaddr & ~OFFSET_MASK)+PAGE_SIZE;
+
+    if (size + vaddr>page_bound){
+        printf("vaddr=0x%lx, write size=%d exceeds page boundary=0x%lx\n",vaddr,size,page_bound);
+        return 1;
+        //assert(0);
+    }
+    shadow_page *page = find_shadow_page(vaddr);
+    if (page==NULL){
+        page = g_new0(shadow_page,1);
+        g_hash_table_insert (SHD_Memory.pages,(gpointer)(SHD_KEY_CONVERSION(vaddr)),page);
+    }
+//    printf("vaddr_of=0x%llx, write_size=%d\n",SHD_find_offset(vaddr),size);
+    memset(&(page->bitmap[SHD_find_offset(vaddr)]),value,size);
+//    printf("vaddr_of=0x%x, value=0x%x\n",0x800e,page->bitmap[SHD_find_offset(0x800e)]);
     return 0;
 }
 

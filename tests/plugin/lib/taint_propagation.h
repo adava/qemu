@@ -39,6 +39,8 @@ shadow_err SHD_clear(shad_inq *src);
 
 shadow_err SHD_copy(shad_inq src, shad_inq *dst); //Mov r/m,r/m dst.id would be set in callee for temps
 
+shadow_err SHD_write_contiguous(uint64_t vaddr, uint32_t size, uint8_t value); //This is for input reads, where a large chunk of taint sources would be tainted. This API takes care of size spanning multiple pages.
+
 shadow_err SHD_cast(void *src,SHD_SIZE old_size,void *res, SHD_SIZE new_size); // pessimistic cast (widens to the new size)
 
 shadow_err SHD_add_sub(shad_inq src, shad_inq *sd); // the second param is both one of the sources and the destination according to x86 add/sub syntax. Internally it is a union and an extendL

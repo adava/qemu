@@ -23,8 +23,8 @@ typedef unsigned long long uint64_t;
 #define PAGE_MASK  ((1 << NUM_PAGES_BITS) - 1)
 #define SHD_find_offset(vaddr) (uint32_t)(vaddr & OFFSET_MASK)
 #define SHD_PAGE_INDEX(vaddr) (vaddr >> PAGE_SIZE_BITS)
-#define SHD_find_page_addr(vaddr) (SHD_PAGE_INDEX(vaddr) & PAGE_MASK)
-#define SHD_KEY_CONVERSION(addr) ((gconstpointer)addr)
+#define SHD_find_page_addr(vaddr) (vaddr & PAGE_MASK)
+#define SHD_KEY_CONVERSION(addr) ((gconstpointer)SHD_PAGE_INDEX(vaddr))
 
 #ifndef GLOBAL_POOL_SIZE
 #ifdef X86_REG_ENDING
@@ -95,4 +95,5 @@ static uint64_t convert_value(void *value, uint8_t size);
 SHD_value SHD_get_shadow(shad_inq inq); // based on type, it would inquiry shadow_memory. The caller would fetch the proper value based on the size
 shadow_err SHD_set_shadow(shad_inq *inq, void *value); //id for temps would be set by the callee
 
+shadow_err write_memory_shadow(uint64_t vaddr, uint32_t size, uint8_t value);
 #endif

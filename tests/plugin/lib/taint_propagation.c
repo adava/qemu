@@ -106,7 +106,7 @@ shadow_err SHD_and_or(shad_inq src, shad_inq *dst, uint8_t *src_val, uint8_t *ds
         op1_v = convert_value(src_val,src.size);
         sh_src = SHD_get_shadow(src);
     }
-    if(src.type==IMMEDIATE){
+    if(dst->type==IMMEDIATE){
         sh_dst = 0;
         op2_v = dst->addr.vaddr;
     }
@@ -171,3 +171,23 @@ shadow_err SHD_copy_conservative(shad_inq src, shad_inq *dst){
     return 0;
 }
 
+shadow_err SHD_write_contiguous(uint64_t vaddr, uint32_t size, uint8_t value){
+    uint64_t page_id = (vaddr & ~OFFSET_MASK);
+    //printf("page_id=%lx\n",page_id);
+    uint64_t new_addr = vaddr;
+    uint32_t written_bytes = 0;
+    while(vaddr + size > page_id + PAGE_SIZE){
+        uint32_t new_size = (page_id + PAGE_SIZE - new_addr);
+        shadow_err res = write_memory_shadow(new_addr,new_size,value);
+        if (res!=0){
+            return res;
+        }
+        written_bytes+=new_size;
+        new_addr = new_addr + new_size;
+        page_id = (new_addr & ~OFFSET_MASK);
+    }
+    if (written_bytes!=size){
+        return write_memory_shadow(written_bytes+vaddr,size-written_bytes,value);
+    }
+    return 0;
+}
