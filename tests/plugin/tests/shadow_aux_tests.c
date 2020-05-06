@@ -162,6 +162,46 @@ void test_write(){
     printf("SUCCESS testing write_memory_shadow: writing %d bytes to %llx  vaddr=0x%llx, shadow_value=0x%llx\n",size,u64_84,inq1.addr.vaddr,sh1);
 }
 
+static void print_mem_shadows(gpointer key, gpointer value) {
+    uint64_t addr = *(uint64_t *)key;
+    uint8_t tval = *(uint8_t *)value;
+    printf("0x%llx -> 0x%x\n", addr, tval);
+}
+
+void test_list_mem(){
+    printf("------Listing memory shadows------\n");
+    int len = SHD_list_mem(print_mem_shadows);
+    printf("Number of tainted pages=%d\n",len);
+    printf("--------------------- ------------\n");
+}
+
+
+void print_global(gpointer key, gpointer value){
+    SHD_value *shadow = (SHD_value *)value;
+    uint64_t id = *(uint64_t *)key;
+    printf("Register %llx=0x%llx\n",id,*shadow);
+}
+
+void test_list_global(){
+    printf("------Listing global shadows------\n");
+    int len=SHD_list_global(print_global);
+    printf("----------------------------------\n");
+}
+void print_temp(gpointer key, gpointer value){
+    SHD_value *shadow = (SHD_value *)value;
+    uint64_t id = *(uint64_t *)key;
+    printf("temp %llx=0x%llx\n",id,*shadow);
+}
+
+void test_list_temp(){
+    printf("-------Listing temp shadows-------\n");
+    int len = SHD_list_temp(print_temp);
+    if (len==0){
+        printf("no temp\n");
+    }
+    printf("----------------------------------\n");
+}
+
 int main(){
     test_conversion();
     test_global_get_set();
@@ -169,7 +209,10 @@ int main(){
     test_find_page();
     test_sh_mem();
     test_sh_temp();
+    test_list_temp();
     test_SHD_get_set();
+    test_list_global();
+    test_list_mem();
     test_write();
     return 0;
 }

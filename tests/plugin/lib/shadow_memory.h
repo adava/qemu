@@ -25,6 +25,7 @@ typedef unsigned long long uint64_t;
 #define SHD_PAGE_INDEX(vaddr) (vaddr >> PAGE_SIZE_BITS)
 #define SHD_find_page_addr(vaddr) (vaddr & PAGE_MASK)
 #define SHD_KEY_CONVERSION(addr) ((gconstpointer)SHD_PAGE_INDEX(vaddr))
+#define SHD_assemble_addr(page, addr) (page << PAGE_SIZE_BITS | addr)
 
 #ifndef GLOBAL_POOL_SIZE
 #ifdef X86_REG_ENDING
@@ -96,4 +97,7 @@ SHD_value SHD_get_shadow(shad_inq inq); // based on type, it would inquiry shado
 shadow_err SHD_set_shadow(shad_inq *inq, void *value); //id for temps would be set by the callee
 
 shadow_err write_memory_shadow(uint64_t vaddr, uint32_t size, uint8_t value);
+int SHD_list_mem(GFunc print_mem_shadows); //The first parameter given to the print_mem_shadows is the memory address, and the second is its non-zero shadow value. The first parameter is live until return.
+int SHD_list_global(GFunc print_func);
+int SHD_list_temp(GFunc print_func);
 #endif

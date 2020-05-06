@@ -188,3 +188,48 @@ shadow_err SHD_set_shadow(shad_inq *inq, void *value){
     }
     return res;
 }
+
+static void hmap_print(gpointer key, gpointer value, gpointer func_p) {
+    GFunc print_func = (GFunc)func_p;
+    if(key!=NULL && value!=NULL){
+        shadow_page *page = (shadow_page *)value;
+        for(int i=0;i<PAGE_SIZE;i++){
+            if(page->bitmap[i]!=0){
+                uint64_t addr = SHD_assemble_addr((uint64_t)key,(uint64_t)i);
+                print_func((gpointer)&addr,(gpointer)&page->bitmap[i]);
+            }
+        }
+    }
+}
+
+int SHD_list_mem(GFunc print_mem_shadows){
+    int len = g_hash_table_size(SHD_Memory.pages);
+    g_hash_table_foreach(SHD_Memory.pages,hmap_print, print_mem_shadows);
+    return len;
+}
+
+int SHD_list_global(GFunc print_func){
+    int len = 0;
+    for(uint64_t i=0;i<GLOBAL_POOL_SIZE;i++){
+        SHD_value *shadow = g_ptr_array_index(SHD_Memory.global_temps, i);
+        if (*shadow!=0){
+            len++;
+            print_func((gpointer)&i,(gpointer)shadow);
+        }
+    }
+    return len;
+}
+
+int SHD_list_temp(GFunc print_func){
+    int len = 0;
+    if (SHD_Memory.global_temps->len>GLOBAL_POOL_SIZE){
+        for(uint64_t i=GLOBAL_POOL_SIZE;i<SHD_Memory.global_temps->len;i++){
+            SHD_value *shadow = g_ptr_array_index(SHD_Memory.global_temps, i);
+            if (*shadow!=0){
+                len++;
+                print_func((gpointer)&i,(gpointer)shadow);
+            }
+        }
+    }
+    return len;
+}
