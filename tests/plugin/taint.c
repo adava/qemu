@@ -22,8 +22,8 @@
 #include <capstone.h>
 #include <stdint.h>
 //#include "lib/shadow_memory.h"
-#include "lib/utility.c"
 #include "lib/tainting.c"
+
 QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
@@ -36,12 +36,13 @@ typedef enum {
 
 static bool do_inline;
 static bool verbose;
+GHashTable *unsupported_ins_log;
 
 static inline void analyzeOp(shad_inq *inq, cs_x86_op operand){
     switch(operand.type){
         case X86_OP_REG:
             inq->type = GLOBAL;
-            inq->addr.id = operand.reg;
+            inq->addr.id = MAP_X86_REGISTER(operand.reg);
             break;
         case X86_OP_IMM:
             inq->type = IMMEDIATE;
@@ -54,7 +55,39 @@ static inline void analyzeOp(shad_inq *inq, cs_x86_op operand){
             printf("unsupported operand type=%d\n",operand.type);
             assert(0);
     }
+    if(inq->addr.vaddr>=GLOBAL_POOL_SIZE && inq->type==GLOBAL){
+        printf("operand.reg=%x name=%s, mapped_val=%x\n",operand.reg,get_reg_name(operand.reg),inq->addr.id);
+        assert(0);
+    }
     inq->size = operand.size;
+}
+
+static inline qemu_plugin_vcpu_udata_cb_t analyze_LEA_Addr(inst_callback_argument *res, x86_op_mem *mem_op){ //assumes segment would not be tainted
+    if (mem_op->index==X86_REG_INVALID && mem_op->base==X86_REG_INVALID){
+        res->src.type = IMMEDIATE; //deactivate memory callback
+        return taint_cb_clear;
+    }
+    if (mem_op->index!=X86_REG_INVALID){
+        res->src.addr.id = MAP_X86_REGISTER(mem_op->index);
+        res->src.size = regsize_map_64[mem_op->index];
+        res->src.type = GLOBAL;
+
+    }else{
+        res->src.type = IMMEDIATE;
+    }
+    if (mem_op->base!=X86_REG_INVALID){
+        res->src2.addr.id = MAP_X86_REGISTER(mem_op->base);
+        res->src2.size = regsize_map_64[mem_op->base];
+        res->src2.type = GLOBAL;
+    }else{
+        res->src2.type = IMMEDIATE;
+    }
+    if (mem_op->scale!=1){
+        res->src3.addr.vaddr = mem_op->scale;
+        res->src3.type = IMMEDIATE;
+        res->src3.size = SHD_SIZE_u32;
+    }
+    return taint_cb_LEA;
 }
 
 static inline inst_callback_argument *analyze_Operands(cs_x86_op *operands,int numOps){
@@ -86,20 +119,12 @@ static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
     if (udata!=NULL){
         arg = (mem_callback_argument *)udata;
         *(arg->addr) = vaddr;
-        free(udata);
+//        free(udata);
     }
     else{
         assert(0);
     }
-    g_autofree gchar *o1 = g_strdup_printf("#op_mem callback#\tvaddr=%lx\n",*(uint64_t *)(arg->addr));
-    qemu_plugin_outs(o1);
-
-//    uint64_t s1 =0;
-//    uint64_t buf =0;
-//    uint64_t s2 =0;
-//    plugin_mem_read(vaddr,sizeof(uint64_t),&buf); //just pass the function AND_OR
-//    g_autofree gchar *out = g_strdup_printf("#op_mem callback#\toperands: %s, addr: 0x%lx, value=%"PRIu64", s1=%"PRIu64", s2=%"PRIu64"\n", (char*)udata, vaddr,buf,s1,s2);
-//    qemu_plugin_outs(out);
+    DEBUG_MEMCB_OUTPUT(arg->addr);
 }
 
 
@@ -112,28 +137,26 @@ static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
 
 static void plugin_exit(qemu_plugin_id_t id, void *p)
 {
-    g_autoptr(GString) report = g_string_new("DEBUG output end:\n");
-    g_string_append_printf(report,"Done!\n");
-    qemu_plugin_outs(report->str);
+    g_autofree gchar *report = g_strdup_printf("\nDEBUG output end:\n");
+    qemu_plugin_outs(report);
+
+    taint_list_all();
+
+    g_autoptr(GString) end_rep = g_string_new("\n");
+    print_unsupported_ins(end_rep,unsupported_ins_log);
+    g_string_append_printf(end_rep, "Done\n");
+    qemu_plugin_outs(end_rep->str);
 }
 
 static void plugin_init(void)
 {
     g_autoptr(GString) report = g_string_new("Initialization:\n");
+    unsupported_ins_log =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     init_register_mapping();
     SHD_init();
     g_string_append_printf(report,"Done!\n");
     qemu_plugin_outs(report->str);
 
-}
-
-static void vcpu_insn_exec_after(unsigned int cpu_index, void *udata)
-{
-    if(udata!=NULL){
-        char *inst = (char *)udata;
-        print_ops(inst);
-    }
-    return;
 }
 
 static void syscall_callback(qemu_plugin_id_t id, unsigned int vcpu_index,
@@ -144,20 +167,20 @@ static void syscall_callback(qemu_plugin_id_t id, unsigned int vcpu_index,
     g_autoptr(GString) out = g_string_new("******system call*******");
     g_string_append_printf(out,"\tnum: %"PRIu64"\n", num);
     // For read system call, num==0, a2 holds the buffer address (to which the read bytes are written) and a3 holds the number of read bytes.
-    if(num==0){
+    if(num==0 && a1==0){ //only standard in; a1==0
         uint8_t value = 0xff;
         SHD_write_contiguous(a2, a3,value);
         g_string_append_printf(out,"TAINTING SOURCE\t a1: %" PRIu64" , source addr: 0x%lx , len: %" PRIu64 "\n",
                 a1,a2,a3);
+        if(!DEBUG_SYSCALL){
+            qemu_plugin_outs(out->str);
+        }
     }
-
-    qemu_plugin_outs(out->str);
+    if(DEBUG_SYSCALL){
+        qemu_plugin_outs(out->str);
+    }
 }
 
-static void nice_print(cs_insn *insn)
-{
-    print_id_groups(insn);
-}
 
 static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 {
@@ -169,6 +192,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 
         mem_callback_argument *mem_cb_arg = NULL;
         void *usr_data=NULL;
+        CB_TYPE cbType=AFTER;
         inst_callback_argument *cb_args=NULL;
         cs_insn *cs_ptr = (cs_insn*)cap_plugin_insn_disas(insn);
         cs_x86 *inst_det = &cs_ptr->detail->x86;
@@ -178,6 +202,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
         cb_args = analyze_Operands(inst_det->operands,inst_det->op_count);
 
         switch(cs_ptr->id){
+            case X86_INS_MOVZX:
             case X86_INS_MOV:
                  //better to take this outside, and set it to NULL for otherwise case
                 cb_args->src.type==IMMEDIATE?(cb = taint_cb_clear):(cb = taint_cb_mov);
@@ -196,17 +221,25 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb_args->src.type==IMMEDIATE?(cb = taint_cb_clear):(cb = taint_cb_mov);
                 nice_print(cs_ptr);
                 break;
+              /*dst = LEFT(UNION(src1,SHIFT(src2,sh_val)))*/
             case X86_INS_LEA:
-            case X86_INS_CMP:
+                nice_print(cs_ptr);
+                cb = analyze_LEA_Addr(cb_args,&inst_det->operands[0].mem);
+                break;
             case X86_INS_SUB:
             case X86_INS_ADD:
-                if (cb_args->src.type==IMMEDIATE || cs_ptr->id==X86_INS_LEA){
+                if (cb_args->src.type==IMMEDIATE){
                     cb = taint_cb_EXTENDL; //we need a left extension like inc/dec but the instruction had two operands
                     copy_inq(cb_args->dst, cb_args->src); //copy dst to src
                 }
                 else{
+//                    copy_inq(cb_args->dst,cb_args->src2);
                     cb = taint_cb_ADD_SUB;
                 }
+                nice_print(cs_ptr);
+                break;
+            case X86_INS_CMP:
+                cb = taint_cb_CMP; //another version of Add/SUB without storing the shadow result
                 nice_print(cs_ptr);
                 break;
             case X86_INS_NEG:
@@ -242,6 +275,10 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb = taint_cb_AND_OR;
                 nice_print(cs_ptr);
                 break;
+            case X86_INS_TEST:
+                cb = taint_cb_TEST;
+                nice_print(cs_ptr);
+                break;
             case X86_INS_XCHG:
                 cb = taint_cb_XCHG;
                 nice_print(cs_ptr);
@@ -256,15 +293,38 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb_args = NULL;
                 nice_print(cs_ptr); //implemented but NOT wouldn't change the taint status
                 break;
+            case X86_INS_JAE:
+            case X86_INS_JA:
+            case X86_INS_JBE:
+            case X86_INS_JB:
+            case X86_INS_JCXZ:
+            case X86_INS_JECXZ:
+            case X86_INS_JE:
+            case X86_INS_JGE:
+            case X86_INS_JG:
+            case X86_INS_JLE:
+            case X86_INS_JL:
+            case X86_INS_JNE:
+            case X86_INS_JNO:
+            case X86_INS_JNP:
+            case X86_INS_JNS:
+            case X86_INS_JO:
+            case X86_INS_JP:
+                cb_args->operation = COND_JMP;
+            case X86_INS_JMP:
+                cb = taint_cb_JUMP;
+                cbType = BEFORE;
+                nice_print(cs_ptr);
+                break;
             default:
                 free(cb_args);
                 cb_args = NULL;
-                usr_data = strdup(qemu_plugin_insn_disas(insn));
-                cb = vcpu_insn_exec_after;
+                handle_unsopported_ins(cs_ptr, unsupported_ins_log);
                 break;
         }
         //register memory callback to get the vaddr if one of the operands is mem
         if (cb_args!=NULL){
+            //usr_data should be allocated
             usr_data = (void*)cb_args;
             if (cb_args->src.type == MEMORY){
                 mem_cb_arg = malloc(sizeof(mem_callback_argument));
@@ -282,8 +342,14 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
         }
         //register the selected callback
         if(cb!=NULL && usr_data!=NULL){
-            qemu_plugin_register_vcpu_after_insn_exec_cb(
-                    insn, cb , QEMU_PLUGIN_CB_NO_REGS, usr_data);
+            if(cbType==AFTER){
+                qemu_plugin_register_vcpu_after_insn_exec_cb(
+                        insn, cb , QEMU_PLUGIN_CB_NO_REGS, usr_data);
+            }
+            else{
+                qemu_plugin_register_vcpu_insn_exec_cb(
+                        insn, cb , QEMU_PLUGIN_CB_NO_REGS, usr_data);
+            }
 
         }
 

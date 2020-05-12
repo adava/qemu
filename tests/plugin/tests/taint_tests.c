@@ -66,7 +66,7 @@ void test_add_sub(){
     uint32_t u32_f4 = 0x1000fff4;
     shad_inq inq2={.addr=id_reg1,.type=GLOBAL,.size=SHD_SIZE_u32};
     SHD_set_shadow(&inq2,&u32_f4);
-    SHD_add_sub(inq2,&inq1);
+    SHD_add_sub(inq2,inq1,&inq1);
     SHD_value t1 = SHD_get_shadow(inq1);
     assert(t1==0xfffffffe);
     printf("SUCCESS testing SHD_add_sub: Add(0x%x, 0x%llx)=0x%llx!\n",u32_f4,m1_after_set,t1);
@@ -254,6 +254,33 @@ void test_write_contiguous() {
            size, u64_84, inq1.addr.vaddr, sh1, inq2.addr.vaddr, sh2, inq3.addr.vaddr, sh3);
 }
 
+void test_test(){
+    SHD_init();
+    uint8_t op_v1 = 0x70;
+    uint8_t op_v2 = 0x7c;
+    uint64_t u64_1e = 0x18ffe;
+    uint8_t shd1 = 0x4f;
+    shad_inq inq1={.addr=u64_1e,.type=MEMORY,.size=SHD_SIZE_u8};
+    SHD_set_shadow(&inq1,&shd1);
+
+    uint32_t u64_e4=0xe004;
+    uint8_t shd2 = 0x6a;
+    shad_inq inq2={.addr=u64_e4,.type=MEMORY,.size=SHD_SIZE_u8};
+    SHD_set_shadow(&inq2,&shd2);
+
+    shad_inq flag1={.addr=0,.type=FLAG,.size=SHD_SIZE_u8};
+    shadow_err res=SHD_test(inq1,inq2,flag1,&op_v1,&op_v2);
+
+    SHD_value t1 = SHD_get_shadow(flag1);
+    uint8_t test_res = 0xff;
+    assert(t1==test_res);
+
+    SHD_value t2 = SHD_get_shadow(inq2);
+    assert(t2==0x6a);
+
+    printf("SUCCESS testing SHD_test: AND/OR(op1_v=0x%x, op1_shadow=0x%x, op2_v=0x%x, op2_shadow=0x%x)=0x%llx/0x%llx!\n",op_v1,shd1,op_v2,shd2,t1,t2);
+}
+
 int main() {
     test_clear();
     test_copy();
@@ -268,5 +295,6 @@ int main() {
     test_Shift_Rotation();
     test_copy_conservative();
     test_write_contiguous();
+    test_test();
     return 0;
 }

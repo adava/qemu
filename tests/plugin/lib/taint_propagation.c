@@ -8,6 +8,8 @@
 
 uint64_t rotate_op(uint64_t n, uint64_t c, shift_op op);
 
+SHD_value and_or(shad_inq src, shad_inq *dst, uint8_t *src_val, uint8_t *dst_val, logical_op op);
+
 uint64_t rotate_op(uint64_t n, uint64_t c, shift_op op){
     const uint64_t mask = MASK(n);
     c = DO_MASK(c,mask);
@@ -72,11 +74,28 @@ shadow_err SHD_union(shad_inq src, shad_inq *dst){
     return r;
 }
 
-shadow_err SHD_add_sub(shad_inq src, shad_inq *sd){
-    SHD_value s_val = SHD_get_shadow(src);
-    SHD_value d_val = SHD_get_shadow(*sd);
+shadow_err SHD_add_sub(shad_inq src1, shad_inq src2, shad_inq *sd){
+    SHD_value s_val = SHD_get_shadow(src1);
+    SHD_value d_val = SHD_get_shadow(src2);
     SHD_value res = RULE_LEFT(RULE_UNION(s_val,d_val));
     shadow_err r = SHD_set_shadow(sd,&res);
+    return r;
+}
+
+shadow_err SHD_LEA(shad_inq src1, shad_inq src2, int shift_val, shad_inq *sd){
+    SHD_value d_val = 0;
+    SHD_value s_val = 0;
+    if(src1.type!=IMMEDIATE && src1.addr.vaddr!=0){
+        s_val = SHD_get_shadow(src1);
+        if (shift_val!=0){
+            s_val = s_val << shift_val;
+        }
+    }
+    if(src2.type!=IMMEDIATE && src2.addr.vaddr!=0){
+        d_val = SHD_get_shadow(src2);
+    }
+    SHD_value res = RULE_LEFT(RULE_UNION(s_val,d_val));
+    shadow_err r = SHD_set_shadow(sd,&res); //update the sd regardless, because we don't know what it was before
     return r;
 }
 
@@ -87,6 +106,34 @@ shadow_err SHD_extensionL(shad_inq src, shad_inq *dst){
     return 0;
 }
 
+shadow_err SHD_CMP(shad_inq src, shad_inq dst, shad_inq flag){
+    shad_inq *im_op = NULL;
+    SHD_value res = 0;
+    SHD_value s_val, d_val;
+    uint8_t value[SHD_SIZE_MAX] = {0};
+    shadow_err r=0;
+    if(src.type==IMMEDIATE && dst.type!=IMMEDIATE){
+        im_op = &dst;
+    }else if (dst.type == IMMEDIATE && src.type!=IMMEDIATE){
+        im_op = &src;
+    }else if (dst.type == IMMEDIATE && src.type==IMMEDIATE){
+        r = 2;
+        return r;
+    }
+    if(im_op!=NULL){
+        s_val = SHD_get_shadow(*im_op);
+        res = RULE_LEFT(s_val);
+    }
+    else{
+        s_val = SHD_get_shadow(src);
+        d_val = SHD_get_shadow(dst);
+        res = RULE_LEFT(RULE_UNION(s_val,d_val));
+    }
+    SHD_cast(&res, sizeof(SHD_value),value, flag.size);
+    r = SHD_set_shadow(&flag,&value);
+    return r;
+}
+
 shadow_err SHD_exchange(shad_inq *src, shad_inq *dst){
     SHD_value s_val = SHD_get_shadow(*src);
     SHD_value d_val = SHD_get_shadow(*dst);
@@ -95,7 +142,7 @@ shadow_err SHD_exchange(shad_inq *src, shad_inq *dst){
     return r1 | r2;
 }
 
-shadow_err SHD_and_or(shad_inq src, shad_inq *dst, uint8_t *src_val, uint8_t *dst_val, logical_op op){
+SHD_value and_or(shad_inq src, shad_inq *dst, uint8_t *src_val, uint8_t *dst_val, logical_op op){
     SHD_value sh_src, sh_dst;
     uint64_t op1_v, op2_v;
     if(src.type==IMMEDIATE){
@@ -126,7 +173,20 @@ shadow_err SHD_and_or(shad_inq src, shad_inq *dst, uint8_t *src_val, uint8_t *ds
             printf("OP_AND=%d, OP_AND=%d, op=%d\n",OP_AND,OP_OR,op);
             assert(0);
     }
+    return res;
+}
+
+shadow_err SHD_and_or(shad_inq src, shad_inq *dst, uint8_t *src_val, uint8_t *dst_val, logical_op op){
+    SHD_value res = and_or(src, dst, src_val, dst_val, op);
     shadow_err r = SHD_set_shadow(dst,&res);
+    return r;
+}
+
+shadow_err SHD_test(shad_inq src1, shad_inq src2, shad_inq flag ,uint8_t *src_val, uint8_t *dst_val){
+    SHD_value res = and_or(src1, &src2, src_val, dst_val, OP_AND);
+    uint8_t value[SHD_SIZE_MAX] = {0};
+    SHD_cast(&res, sizeof(SHD_value),value, flag.size);
+    shadow_err r = SHD_set_shadow(&flag,&value);
     return r;
 }
 
@@ -139,12 +199,10 @@ shadow_err SHD_Shift_Rotation(shad_inq src, shad_inq *dst, shift_op op){
         SHD_cast(&temp1,src.size,&s_val,dst->size);
     }
     switch (op){
-        case Shr:
-            shift_res = d_val > src.addr.vaddr;
-            break;
         case Shl:
-            shift_res = d_val < src.addr.vaddr;
+            shift_res = d_val << src.addr.vaddr;
             break;
+        case Shr:
         case Sar:
             shift_res = d_val >> src.addr.vaddr;
             break;
@@ -167,8 +225,8 @@ shadow_err SHD_copy_conservative(shad_inq src, shad_inq *dst){
     SHD_value dst_shadow= SHD_get_shadow(src);
     uint8_t value[SHD_SIZE_MAX] = {0};
     SHD_cast(&dst_shadow, sizeof(SHD_value),value, dst->size);
-    SHD_set_shadow(dst,&value);
-    return 0;
+    shadow_err r = SHD_set_shadow(dst,&value);
+    return r;
 }
 
 shadow_err SHD_write_contiguous(uint64_t vaddr, uint32_t size, uint8_t value){

@@ -10,6 +10,14 @@
 
 #include "shadow_memory.h"
 
+#ifdef DEBUG_ON
+#define DEBUG_TAINT_SOURCE(inq, value)     if (value!=0){\
+                                                    printf("inquiry is tainted => inq.type=%d, addr/id=0x%lx, size=%d\n",inq->type,inq->addr.vaddr,inq->size);\
+                                                    assert(0);}
+#else
+#define DEBUG_TAINT_SOURCE(inq, value)
+#endif
+
 shadow_page *find_shadow_page(uint64_t vaddr); // would get the higher part of the address and searches SHD_Memory pages for the inquiry page
 
 void *get_shadow_memory(uint64_t vaddr); //the entire memory is addressable, plus this is an internal function. The caller fetches properly
@@ -59,6 +67,7 @@ void SHD_initialize_globals(void){
         SHD_value *shadow = g_new0(SHD_value,1); //would initialize to zero
         g_ptr_array_add(SHD_Memory.global_temps,shadow);
     }
+    memset(SHD_Memory.flags,0,MAX_NUM_FLAGS);
 }
 
 void SHD_init(void){
@@ -73,8 +82,8 @@ shadow_page *find_shadow_page(uint64_t vaddr){
 }
 
 SHD_value *get_shadow_global(int id){
-    SHD_value *shadow = g_ptr_array_index(SHD_Memory.global_temps, id);
-    //could return NULL
+    SHD_value *shadow = NULL;
+    shadow = g_ptr_array_index(SHD_Memory.global_temps, id);
     return shadow;
 }
 
@@ -104,6 +113,10 @@ SHD_value SHD_get_shadow(shad_inq inq){
             shv!=NULL?(rval = convert_value(shv,inq.size)):(rval=0);
             break;
         case GLOBAL:
+            if (inq.addr.id>=GLOBAL_POOL_SIZE){
+                printf("ERROR: Global ID greater than the pool size\n");
+//        assert(0);
+            }
         case TEMP:
             shv = get_shadow_global(inq.addr.id);
             shv!=NULL?(rval=(*(SHD_value*)shv)):(rval=0);
@@ -112,6 +125,7 @@ SHD_value SHD_get_shadow(shad_inq inq){
             printf("inq.type=%d\n",inq.type);
             assert(0);
     }
+    DEBUG_TAINT_SOURCE(&inq,rval)
     return rval;
 }
 
@@ -169,6 +183,7 @@ static inline shadow_err set_flags_shadow(int id, void *value){
 
 shadow_err SHD_set_shadow(shad_inq *inq, void *value){
     shadow_err res=0;
+    DEBUG_TAINT_SOURCE(inq,*(uint64_t *)(value))
     switch (inq->type){
         case MEMORY:
             res=set_memory_shadow(inq->addr.vaddr,inq->size,value);
@@ -193,7 +208,7 @@ static void hmap_print(gpointer key, gpointer value, gpointer func_p) {
     GFunc print_func = (GFunc)func_p;
     if(key!=NULL && value!=NULL){
         shadow_page *page = (shadow_page *)value;
-        for(int i=0;i<PAGE_SIZE;i++){
+        for(int i=0;i<PAGE_SIZE;i=i+SHD_SIZE_u64){
             if(page->bitmap[i]!=0){
                 uint64_t addr = SHD_assemble_addr((uint64_t)key,(uint64_t)i);
                 print_func((gpointer)&addr,(gpointer)&page->bitmap[i]);
