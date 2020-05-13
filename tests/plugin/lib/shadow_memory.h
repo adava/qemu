@@ -15,6 +15,24 @@ typedef unsigned int   uint32_t;
 typedef signed long long   int64_t;
 typedef unsigned long long uint64_t;
 #endif
+#define DEREF_TYPE(buf,type) (*(type*)buf)
+
+#define SIZE_SET(buf,size,res)  switch(size){\
+                                case SHD_SIZE_u8:\
+                                    DEREF_TYPE(buf,uint8_t) =DEREF_TYPE(res,uint8_t);\
+                                    break;\
+                                case SHD_SIZE_u16:\
+                                    DEREF_TYPE(buf,uint16_t)=DEREF_TYPE(res,uint16_t);\
+                                    break;\
+                                case SHD_SIZE_u32:\
+                                    DEREF_TYPE(buf,uint32_t)=DEREF_TYPE(res,uint32_t);\
+                                    break;\
+                                case SHD_SIZE_u64:\
+                                    DEREF_TYPE(buf,uint64_t)=DEREF_TYPE(res,uint64_t);\
+                                    break;\
+                                default:\
+                                   assert(0);\
+                                }
 
 #define PAGE_SIZE_BITS TARGET_PAGE_BITS
 #define NUM_PAGES_BITS (32 - PAGE_SIZE_BITS)
@@ -92,8 +110,10 @@ int SHD_map_reg(int reg_code); //returns internal ID assignment for CPU register
 guint SHD_ghash_addr(gconstpointer key);
 
 static uint64_t convert_value(void *value, uint8_t size);
+/* Based on type, it would inquiry shadow_memory. Globals lower bytes will be returned based on the inquiry size. Memory shadows would be read based on the address and size e.g. for a 4 bytes query, it reads 4 bytes from the address.
+ The result is always converted to a 8 byte shadow value. */
+SHD_value SHD_get_shadow(shad_inq inq);
 
-SHD_value SHD_get_shadow(shad_inq inq); // based on type, it would inquiry shadow_memory. The caller would fetch the proper value based on the size
 shadow_err SHD_set_shadow(shad_inq *inq, void *value); //id for temps would be set by the callee
 
 shadow_err write_memory_shadow(uint64_t vaddr, uint32_t size, uint8_t value);

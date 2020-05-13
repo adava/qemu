@@ -135,13 +135,17 @@ void test_SHD_get_set(){
     shad_inq inq3={.addr=u64_84,.type=MEMORY,.size=sizeof(uint16_t)};
     SHD_set_shadow(&inq3,&u16_1f);
 
+    uint8_t u8_1 = 0x1;
+    inq2.size = sizeof(u8_1);
+    SHD_set_shadow(&inq2,&u8_1); //simulating lower parts of a register assignment
+
     SHD_value g_sh1=SHD_get_shadow(inq1);
     assert(g_sh1==u64_f1);
     SHD_value g_sh2=SHD_get_shadow(inq2);
-    assert(g_sh2==u64_f5);
+    assert(g_sh2==u8_1);
     SHD_value sh_value=SHD_get_shadow(inq3);
     assert(sh_value==u16_1f);
-    printf("SUCCESS testing SHD_set_shadow and SHD_get_shadow: id1=%d, id2=%d, sh1=%llu, sh2=%llu, vaddr=%llu, vaddr_shd=%x\n",inq1.addr.id,inq2.addr.id,g_sh1,g_sh2,u64_84,u16_1f);
+    printf("SUCCESS testing SHD_set_shadow and SHD_get_shadow: id1=%d, id2=%d, sh1=0x%llx, sh2=0x%llx, vaddr=%llx, vaddr_shd=%x\n",inq1.addr.id,inq2.addr.id,g_sh1,g_sh2,u64_84,u16_1f);
 }
 
 

@@ -81,6 +81,19 @@ shadow_err SHD_add_sub(shad_inq src1, shad_inq src2, shad_inq *sd){
     shadow_err r = SHD_set_shadow(sd,&res);
     return r;
 }
+shadow_err SHD_CAddSub(shad_inq src1, shad_inq src2, shad_inq carry,shad_inq *sd){
+    uint8_t buf[SHD_SIZE_MAX]={0};
+    SHD_value s1_val = src1.type==IMMEDIATE?0:SHD_get_shadow(src1);
+    SHD_value s2_val = SHD_get_shadow(src2);
+    SHD_value c_val = SHD_get_shadow(carry);
+    SHD_value casted_C = 0;
+    int m_size = src1.size>=src2.size?src1.size:src2.size;
+    SHD_cast(&c_val,sizeof(SHD_value),&casted_C, m_size);
+    SHD_value res = RULE_UNION(RULE_LEFT(RULE_UNION(s1_val,s2_val)),casted_C);
+    SIZE_SET(buf,m_size,res)
+    shadow_err r = SHD_set_shadow(sd,buf);
+    return r;
+}
 
 shadow_err SHD_LEA(shad_inq src1, shad_inq src2, int shift_val, shad_inq *sd){
     SHD_value d_val = 0;
@@ -99,11 +112,29 @@ shadow_err SHD_LEA(shad_inq src1, shad_inq src2, int shift_val, shad_inq *sd){
     return r;
 }
 
-shadow_err SHD_extensionL(shad_inq src, shad_inq *dst){
+shadow_err SHD_extensionL(shad_inq src, shad_inq *dst){ //would consider the destination length! NOT TESTED!
     SHD_value s_val = SHD_get_shadow(src);
     SHD_value res = RULE_LEFT(s_val);
-    SHD_set_shadow(dst,&res);
-    return 0;
+    uint8_t buf[SHD_SIZE_MAX]={0};
+    shadow_err r=0;
+    switch(dst->size){
+        case SHD_SIZE_u8:
+            DEREF_TYPE(buf,uint8_t)=res&0xff;
+            break;
+        case SHD_SIZE_u16:
+            DEREF_TYPE(buf,uint16_t)=res&0xffff;
+            break;
+        case SHD_SIZE_u32:
+            DEREF_TYPE(buf,uint32_t)=res&0xffffffff;
+            break;
+        case SHD_SIZE_u64:
+            DEREF_TYPE(buf,uint64_t)=res;
+            break;
+        default:
+            assert(0);
+    }
+    r = SHD_set_shadow(dst,buf);
+    return r;
 }
 
 shadow_err SHD_CMP(shad_inq src, shad_inq dst, shad_inq flag){

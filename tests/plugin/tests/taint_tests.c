@@ -92,14 +92,22 @@ void test_extensionL(){
     SHD_init();
     uint64_t u64_8e = 0x8ffe;
     uint32_t u32_ef=0xe004;
+    uint16_t u16_4=0x04;
+
     shad_inq inq1={.addr=u64_8e,.type=MEMORY,.size=SHD_SIZE_u32};
+    shad_inq inq2={.addr=13,.type=GLOBAL,.size=SHD_SIZE_u16};
     SHD_set_shadow(&inq1,&u32_ef);
+    SHD_set_shadow(&inq2,&u16_4);
     SHD_value m1_after_set = SHD_get_shadow(inq1);
+    SHD_value r1_after_set = SHD_get_shadow(inq2);
 
     SHD_extensionL(inq1,&inq1);
+    SHD_extensionL(inq2,&inq2);
     SHD_value t1 = SHD_get_shadow(inq1);
+    SHD_value t2 = SHD_get_shadow(inq2);
     assert(t1==0xfffffffc);
-    printf("SUCCESS testing SHD_extensionL: ExtensionL(0x%llx)=0x%llx!\n",m1_after_set,t1);
+    assert(t2==0xfffc);
+    printf("SUCCESS testing SHD_extensionL: ExtensionL(0x%llx)=0x%llx, ExtensionL(0x%llx)=0x%llx!\n",m1_after_set,t1,r1_after_set,t2);
 }
 
 void test_exchange(){
@@ -164,8 +172,8 @@ void test_and(){
     assert(t2==or_res);
 
     uint8_t op1,op2=0;
-    MEM_read(u64_1e,&op1,1);
-    MEM_read(u64_e4,&op2,1);
+    MEM_read(u64_1e,1,&op1);
+    MEM_read(u64_e4,1,&op2);
 
     printf("SUCCESS testing SHD_and_or: AND/OR(op1_v=0x%x, op1_shadow=0x%x, op2_v=0x%x, op2_shadow=0x%x)=0x%llx/0x%llx!\n",op1,shd1,op2,shd2,t1,t2);
     //uint8_t or_res = 0x4b;

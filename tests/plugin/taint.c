@@ -238,6 +238,11 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 }
                 nice_print(cs_ptr);
                 break;
+            case X86_INS_ADC:
+            case X86_INS_SBB:
+                cb = taint_cb_ADC_SBB;
+                nice_print(cs_ptr);
+                break;
             case X86_INS_CMP:
                 cb = taint_cb_CMP; //another version of Add/SUB without storing the shadow result
                 nice_print(cs_ptr);
@@ -249,6 +254,10 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb = taint_cb_EXTENDL;
                 nice_print(cs_ptr);
                 break;
+            case X86_INS_MOVSX:
+                cb = taint_cb_EXTENDL;
+                //print_ops(cs_ptr->mnemonic, cs_ptr->op_str);
+                nice_print(cs_ptr);
             case X86_INS_XOR:
                 if (cb_args->src.type==IMMEDIATE){
                     cb = taint_cb_mov;
@@ -288,6 +297,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb = taint_cb_MUL_DIV;
                 nice_print(cs_ptr);
                 break;
+            case X86_INS_NOP:
             case X86_INS_NOT:
                 free(cb_args);
                 cb_args = NULL;
@@ -310,7 +320,9 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_JNS:
             case X86_INS_JO:
             case X86_INS_JP:
+            case X86_INS_JS:
                 cb_args->operation = COND_JMP;
+//            case X86_INS_JRCXZ: special instruction, checks registers instead of flags
             case X86_INS_JMP:
                 cb = taint_cb_JUMP;
                 cbType = BEFORE;

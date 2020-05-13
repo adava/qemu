@@ -8,7 +8,6 @@
 
 #define MASK(n) ((CHAR_BIT*sizeof(n))-1)
 #define DO_MASK(c,mask) (c & mask)
-#define DEREF_TYPE(buf,type) (*(type*)buf)
 
 #define ROTATE_LEFT(n, c) asm inline ("rol %1, %0\n\t" : "=r" (n) : "=r" (c)) //not tested
 
@@ -45,6 +44,8 @@ shadow_err SHD_write_contiguous(uint64_t vaddr, uint32_t size, uint8_t value); /
 shadow_err SHD_cast(void *src,SHD_SIZE old_size,void *res, SHD_SIZE new_size); // pessimistic cast (widens to the new size)
 
 shadow_err SHD_add_sub(shad_inq src1, shad_inq src2, shad_inq *sd); // Internally it is a union and an extendL
+
+shadow_err SHD_CAddSub(shad_inq src1, shad_inq src2, shad_inq carry,shad_inq *sd);
 
 shadow_err SHD_LEA(shad_inq src1, shad_inq src2, int shift_val, shad_inq *sd);
 

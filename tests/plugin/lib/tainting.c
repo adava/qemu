@@ -143,6 +143,18 @@ static void taint_cb_ADD_SUB(unsigned int cpu_index, void *udata){
     OUTPUT_ERROR(err,arg,"ADD/SUB");
 }
 
+
+static void taint_cb_ADC_SBB(unsigned int cpu_index, void *udata){
+    shadow_err err = 0;
+    INIT_ARG(arg,udata);
+    DEBUG_OUTPUT(arg,"taint_cb_ADDC_SBB");
+    shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
+    err = SHD_CAddSub(arg->src,arg->dst,flags,&arg->dst);
+    //handle eflags
+    SHD_copy_conservative(arg->dst,&flags);
+    OUTPUT_ERROR(err,arg,"ADC/SBB");
+}
+
 static void taint_cb_LEA(unsigned int cpu_index, void *udata){
     shadow_err err = 0;
     INIT_ARG(arg,udata);

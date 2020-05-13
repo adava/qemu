@@ -103,14 +103,13 @@ static void *get_flags_shadow(int id){
 SHD_value SHD_get_shadow(shad_inq inq){
     void *shv;
     SHD_value rval=0;
+//    void *g_addr = NULL;
     switch (inq.type){
         case MEMORY:
             shv = get_shadow_memory(inq.addr.vaddr);
-            shv!=NULL?(rval = convert_value(shv,inq.size)):(rval=0);
             break;
         case FLAG:
             shv = get_flags_shadow(inq.addr.id); //the return value is flag size, cast would not be automatically applied.
-            shv!=NULL?(rval = convert_value(shv,inq.size)):(rval=0);
             break;
         case GLOBAL:
             if (inq.addr.id>=GLOBAL_POOL_SIZE){
@@ -119,12 +118,13 @@ SHD_value SHD_get_shadow(shad_inq inq){
             }
         case TEMP:
             shv = get_shadow_global(inq.addr.id);
-            shv!=NULL?(rval=(*(SHD_value*)shv)):(rval=0);
             break;
         default:
             printf("inq.type=%d\n",inq.type);
             assert(0);
     }
+    rval = shv!=NULL?convert_value(shv,inq.size):0;
+//    printf("shv=%p, ind=%d, g_addr=%p, shadow=0x%llx\n",shv,g_ind,g_addr,*(SHD_value*)shv);
     DEBUG_TAINT_SOURCE(&inq,rval)
     return rval;
 }
@@ -138,11 +138,13 @@ shadow_err set_temp_shadow(int *id, uint8_t size, void *value){
     return 0;
 }
 
-shadow_err set_global_shadow(int id, uint8_t size, void *value){
+shadow_err set_global_shadow(int id, uint8_t size, void *value){ // Big/Little Endian problems might occur. Assumes Big Endian here
     assert(id<GLOBAL_POOL_SIZE);
     SHD_value *shadow = get_shadow_global(id); //get the reference
     assert(shadow!=NULL);
-    *shadow = convert_value(value, size); //assignment
+    SIZE_SET((shadow),size,value)
+    //printf("shadow_ptr=%p, ind=%d, value=0x%lx, shadow=%llx\n",shadow,0,*(SHD_value *)value,*(SHD_value*)shadow);
+    //*shadow = convert_value(value, size); //assignment
     return 0;
 }
 
