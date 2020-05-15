@@ -255,9 +255,11 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 nice_print(cs_ptr);
                 break;
             case X86_INS_MOVSX:
+            case X86_INS_MOVSXD:
                 cb = taint_cb_EXTENDL;
                 //print_ops(cs_ptr->mnemonic, cs_ptr->op_str);
                 nice_print(cs_ptr);
+                break;
             case X86_INS_XOR:
                 if (cb_args->src.type==IMMEDIATE){
                     cb = taint_cb_mov;
@@ -282,6 +284,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_OR:
                 set_opId(cs_ptr->id,cb_args->operation);
                 cb = taint_cb_AND_OR;
+//                cbType = BEFORE;
                 nice_print(cs_ptr);
                 break;
             case X86_INS_TEST:
@@ -297,6 +300,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb = taint_cb_MUL_DIV;
                 nice_print(cs_ptr);
                 break;
+            case X86_INS_SYSCALL: //handled in system call cb
             case X86_INS_NOP:
             case X86_INS_NOT:
                 free(cb_args);
@@ -325,6 +329,29 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 //            case X86_INS_JRCXZ: special instruction, checks registers instead of flags
             case X86_INS_JMP:
                 cb = taint_cb_JUMP;
+                cbType = BEFORE;
+                nice_print(cs_ptr);
+                break;
+            case X86_INS_CALL:
+                cb_args->src2.addr.id = R_EIP;
+                cb_args->src2.type = GLOBAL;
+                cb_args->src2.size = SHD_SIZE_u64;
+                cb_args->dst.addr.id = R_ESP;
+                cb_args->dst.type = GLOBAL;
+                cb_args->dst.size = SHD_SIZE_u64;
+                cbType = BEFORE;
+                cb = taint_cb_CALL;
+                nice_print(cs_ptr);
+                break;
+            case X86_INS_RET:
+                cb_args = malloc(sizeof(inst_callback_argument));
+                cb_args->src.addr.id = R_ESP;
+                cb_args->src.type = GLOBAL;
+                cb_args->src.size = SHD_SIZE_u64;
+                cb_args->dst.addr.id = R_EIP;
+                cb_args->dst.type = GLOBAL;
+                cb_args->dst.size = SHD_SIZE_u64;
+                cb = taint_cb_RET;
                 cbType = BEFORE;
                 nice_print(cs_ptr);
                 break;

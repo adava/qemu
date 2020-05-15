@@ -263,15 +263,16 @@ void plugin_reg_read(uint32_t reg, int len, void *buf)
     uint8_t shift = 0;
     uint64_t value =0 ;
 #ifdef TARGET_X86_64
-    CPUX86State *cpu = (CPUX86State*)current_cpu;
+    CPUX86State *cpu = &(X86_CPU(current_cpu)->env);
     if (qreg>15){ //high parts of the general registers see i386/translate and access to AH for an example
-        qreg -=15;
+        qreg -=16;
         shift = 1;
     }
-    value = cpu->regs[qreg];
+    value = (uint32_t)cpu->regs[qreg];
+//    printf("value=%lx, reg=%d qreg=%d\n",value,reg,qreg);
 #endif
     if (shift){
-        value = value > 32;
+        value = value >> 8;
     }
     switch(len){
         case 1:

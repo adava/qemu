@@ -22,11 +22,14 @@ void test_conversion(){
 
 void test_global_get_set(){
     SHD_init();
-    uint16_t u16_f = 0xffff;
-    set_global_shadow(5,2,&u16_f);
+    uint16_t u16_f = 0xffaa;
+    uint8_t u8_d = 0xdd;
+    set_global_shadow(1,2,&u16_f);
+    set_global_shadow(17,1,&u8_d);
 
     SHD_value *shd1 = get_shadow_global(1);
-    SHD_value *shd2 = get_shadow_global(5);
+    assert(*shd1=0xddaa);
+    SHD_value *shd2 = get_shadow_global(17);
     SHD_value *shd3 = get_shadow_global(126);
     printf("testing get_shadow_global, set_global_shadow: shd1=%llx, shd2=%llx\n",*shd1,*shd2);
 }

@@ -12,6 +12,20 @@
 //#define DEBUG_CB
 #define DEBUG_SYSCALL 1
 
+#define READ_VALUE(inq,buf) switch(inq.type){ \
+                                case GLOBAL:\
+                                    plugin_reg_read(inq.addr.id,inq.size,buf);\
+                                    break;\
+                                case MEMORY:\
+                                    plugin_mem_read(inq.addr.vaddr,inq.size,buf);\
+                                    break;\
+                                case IMMEDIATE:\
+                                    break;\
+                                default:\
+                                    assert(0);\
+                            }
+
+
 #ifdef DEBUG_CB
 #define DEBUG_OUTPUT(arg, inst_s) g_autofree gchar *o1=g_strdup_printf("%s: src=0x%lx, size=%d, type=%d\t dst=0x%lx, size=%d, type=%d\n",inst_s,\
                                   arg->src.addr.vaddr, arg->src.size, arg->src.type,arg->dst.addr.vaddr, arg->dst.size, arg->dst.type);\
@@ -119,6 +133,8 @@ static void taint_cb_mov(unsigned int cpu_index, void *udata){ //use taint_cb pr
     shadow_err err = 0;
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_mov");
+//    uint8_t buf_dst_val[SHD_SIZE_MAX]={0};
+//    READ_VALUE(arg->dst,buf_dst_val);
     err = SHD_copy(arg->src,&arg->dst);
     OUTPUT_ERROR(err,arg,"MOV");
 //    free(udata); //no need to free right away, a cb for an instance of an instruction might be called several times!
@@ -212,18 +228,7 @@ static void taint_cb_XCHG(unsigned int cpu_index, void *udata){
     err = SHD_exchange(&arg->src,&arg->dst);
     OUTPUT_ERROR(err,arg,"XCHG");
 }
-#define READ_VALUE(inq,buf) switch(inq.type){ \
-                                case GLOBAL:\
-                                    plugin_reg_read(MAP_X86_REGISTER(inq.addr.id),inq.size,buf);\
-                                    break;\
-                                case MEMORY:\
-                                    plugin_mem_read(inq.addr.vaddr,inq.size,buf);\
-                                    break;\
-                                case IMMEDIATE:\
-                                    break;\
-                                default:\
-                                    assert(0);\
-                            }
+
 static void taint_cb_AND_OR(unsigned int cpu_index, void *udata){
     shadow_err err = 0;
     INIT_ARG(arg,udata);
@@ -232,6 +237,7 @@ static void taint_cb_AND_OR(unsigned int cpu_index, void *udata){
     uint8_t buf_dst_val[SHD_SIZE_MAX]={0};
     READ_VALUE(arg->src,buf_src_val);
     READ_VALUE(arg->dst,buf_dst_val);
+
     err = SHD_and_or(arg->src,&arg->dst,buf_src_val,buf_dst_val,arg->operation);
     shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
     SHD_copy_conservative(arg->dst,&flags);
@@ -306,6 +312,37 @@ static void taint_cb_JUMP(unsigned int cpu_index, void *udata) {
         SHD_value flags_shadow = SHD_get_shadow(flags);
         OUTPUT_ERROR(flags_shadow!=0,arg,"JUMP *** flags are tainted ***");
     }
+}
+static void taint_cb_CALL(unsigned int cpu_index, void *udata) {
+    shadow_err err = 0;
+    INIT_ARG(arg,udata);
+
+    DEBUG_OUTPUT(arg,"taint_cb_CALL");
+    READ_VALUE(arg->dst, &arg->dst.addr.vaddr); //we need the value of stack register, we use the value as a memory address to store the eip taint
+    arg->dst.type = MEMORY;
+    err = SHD_copy(arg->src2,&arg->dst);
+
+    OUTPUT_ERROR(err,arg,"CALL error storing the eip taint");
+    //check the destination address
+    arg->src.type = MEMORY;
+    SHD_value jmp_addr = SHD_get_shadow(arg->src);
+    jmp_addr!=0?(err=1):(err=0);
+    OUTPUT_ERROR(err,arg,"CALL *** destination function address is tainted ***");
+}
+
+static void taint_cb_RET(unsigned int cpu_index, void *udata) { //reverse of CALL, RET target is one put in the dst read from stack
+    shadow_err err = 0;
+    INIT_ARG(arg,udata);
+    DEBUG_OUTPUT(arg,"taint_cb_RET");
+
+    READ_VALUE(arg->src, &arg->src.addr.vaddr);
+    arg->src.type = MEMORY;
+    err = SHD_copy(arg->src,&arg->dst);
+    OUTPUT_ERROR(err,arg,"RET error storing the stack taint");
+    //check the destination address
+    SHD_value jmp_addr = SHD_get_shadow(arg->dst);
+    jmp_addr!=0?(err=1):(err=0);
+    OUTPUT_ERROR(err,arg,"RET *** destination function address is tainted ***");
 }
 
 static void print_shadow(gpointer key, gpointer value){

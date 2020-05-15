@@ -82,7 +82,6 @@ shadow_err SHD_add_sub(shad_inq src1, shad_inq src2, shad_inq *sd){
     return r;
 }
 shadow_err SHD_CAddSub(shad_inq src1, shad_inq src2, shad_inq carry,shad_inq *sd){
-    uint8_t buf[SHD_SIZE_MAX]={0};
     SHD_value s1_val = src1.type==IMMEDIATE?0:SHD_get_shadow(src1);
     SHD_value s2_val = SHD_get_shadow(src2);
     SHD_value c_val = SHD_get_shadow(carry);
@@ -90,8 +89,7 @@ shadow_err SHD_CAddSub(shad_inq src1, shad_inq src2, shad_inq carry,shad_inq *sd
     int m_size = src1.size>=src2.size?src1.size:src2.size;
     SHD_cast(&c_val,sizeof(SHD_value),&casted_C, m_size);
     SHD_value res = RULE_UNION(RULE_LEFT(RULE_UNION(s1_val,s2_val)),casted_C);
-    SIZE_SET(buf,m_size,res)
-    shadow_err r = SHD_set_shadow(sd,buf);
+    shadow_err r = SHD_set_shadow(sd,&res); //size is not considered
     return r;
 }
 

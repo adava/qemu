@@ -2,42 +2,14 @@
 // Created by sina on 4/29/20.
 //
 #include <capstone.h>
-
+#include "utility.h"
 #define INVALID_REGISTER X86_REG_ENDING+1
 #define MAP_X86_REGISTER(CAP_ID) x86_regs_mapping[CAP_ID]
 
 static uint32_t x86_regs_mapping[X86_REG_ENDING] = {INVALID_REGISTER};
 void init_register_mapping(void);
 
-enum {
-    R_EAX = 0,
-    R_ECX = 1,
-    R_EDX = 2,
-    R_EBX = 3,
-    R_ESP = 4,
-    R_EBP = 5,
-    R_ESI = 6,
-    R_EDI = 7,
-    R_R8 = 8,
-    R_R9 = 9,
-    R_R10 = 10,
-    R_R11 = 11,
-    R_R12 = 12,
-    R_R13 = 13,
-    R_R14 = 14,
-    R_R15 = 15,
-
-    R_AL = 0,
-    R_CL = 1,
-    R_DL = 2,
-    R_BL = 3,
-    R_AH = 16, //from here, they are different than i386/cpu.h
-    R_CH = 17,
-    R_DH = 18,
-    R_BH = 19,
-};
-
-#define NUM_MAPPED_REGISTERS 45
+#define NUM_MAPPED_REGISTERS 46
 const uint32_t caps_x86_regs[NUM_MAPPED_REGISTERS] = {
         X86_REG_AH, // R_AH
         X86_REG_AL, //R_AL
@@ -84,6 +56,7 @@ const uint32_t caps_x86_regs[NUM_MAPPED_REGISTERS] = {
         X86_REG_R13, //R_R13
         X86_REG_R14, //R_R14
         X86_REG_R15, //R_R15
+        X86_REG_RIP,
 };
 
 const uint32_t qemu_x86_regs[NUM_MAPPED_REGISTERS] = {
@@ -132,6 +105,7 @@ const uint32_t qemu_x86_regs[NUM_MAPPED_REGISTERS] = {
         R_R13,
         R_R14,
         R_R15,
+        R_EIP
 };
 
 void init_register_mapping(void){

@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <glib.h>
-
+#include "../lib/utility.h"
 #include "shadow_memory.h"
 
 #ifdef DEBUG_ON
@@ -83,7 +83,14 @@ shadow_page *find_shadow_page(uint64_t vaddr){
 
 SHD_value *get_shadow_global(int id){
     SHD_value *shadow = NULL;
-    shadow = g_ptr_array_index(SHD_Memory.global_temps, id);
+    int rid = id;
+    if(id>R_HIGH && id<R_EXTRA){ //handling higher parts of the general registers
+        rid -=R_HIGH+1;
+    }
+    shadow = g_ptr_array_index(SHD_Memory.global_temps, rid);
+    if(rid!=id){
+        shadow = (SHD_value *)(((uint8_t *)(shadow))+1);
+    }
     return shadow;
 }
 
@@ -140,8 +147,15 @@ shadow_err set_temp_shadow(int *id, uint8_t size, void *value){
 
 shadow_err set_global_shadow(int id, uint8_t size, void *value){ // Big/Little Endian problems might occur. Assumes Big Endian here
     assert(id<GLOBAL_POOL_SIZE);
-    SHD_value *shadow = get_shadow_global(id); //get the reference
+    int rid = id;
+    if(id>R_HIGH && id<R_EXTRA){
+        rid -=R_HIGH+1;
+    }
+    SHD_value *shadow = get_shadow_global(rid); //get the reference
     assert(shadow!=NULL);
+    if(rid!=id){
+        shadow = (SHD_value *)(((uint8_t *)(shadow))+1);
+    }
     SIZE_SET((shadow),size,value)
     //printf("shadow_ptr=%p, ind=%d, value=0x%lx, shadow=%llx\n",shadow,0,*(SHD_value *)value,*(SHD_value*)shadow);
     //*shadow = convert_value(value, size); //assignment
