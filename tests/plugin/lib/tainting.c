@@ -27,8 +27,8 @@
 
 
 #ifdef DEBUG_CB
-#define DEBUG_OUTPUT(arg, inst_s) g_autofree gchar *o1=g_strdup_printf("%s: src=0x%lx, size=%d, type=%d\t dst=0x%lx, size=%d, type=%d\n",inst_s,\
-                                  arg->src.addr.vaddr, arg->src.size, arg->src.type,arg->dst.addr.vaddr, arg->dst.size, arg->dst.type);\
+#define DEBUG_OUTPUT(arg, inst_s) g_autofree gchar *o1=g_strdup_printf("%s: src=0x%lx, size=%d, type=%d\t src2=0x%lx, size=%d, type=%d\t dst=0x%lx, size=%d, type=%d\n",inst_s,\
+                                  arg->src.addr.vaddr, arg->src.size, arg->src.type,arg->src2.addr.vaddr, arg->src2.size, arg->src2.type,arg->dst.addr.vaddr, arg->dst.size, arg->dst.type);\
                                   qemu_plugin_outs(o1);
 #else
 #define DEBUG_OUTPUT(arg, inst_s)
@@ -152,7 +152,7 @@ static void taint_cb_ADD_SUB(unsigned int cpu_index, void *udata){
     shadow_err err = 0;
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_ADD_SUB");
-    err = SHD_add_sub(arg->src,arg->dst,&arg->dst);
+    err = SHD_add_sub(arg->src,arg->src2,&arg->dst);
     //handle eflags
     shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
     SHD_copy_conservative(arg->dst,&flags);
@@ -269,21 +269,21 @@ static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
         case SHD_SIZE_u16:
             arg->dst.addr.id = MAP_X86_REGISTER(X86_REG_AX);
             arg->dst.size = SHD_SIZE_u16;
-            err = SHD_copy_conservative(arg->src,&arg->dst);
+            err = SHD_add_sub(arg->src,arg->dst,&arg->dst);
             OUTPUT_ERROR(err,arg,"Mul");
             arg->dst.addr.id = MAP_X86_REGISTER(X86_REG_DX);
             break;
         case SHD_SIZE_u32:
             arg->dst.addr.id = MAP_X86_REGISTER(X86_REG_EAX);
             arg->dst.size = SHD_SIZE_u32;
-            err = SHD_copy_conservative(arg->src,&arg->dst);
+            err = SHD_add_sub(arg->src,arg->dst,&arg->dst);
             OUTPUT_ERROR(err,arg,"Mul");
             arg->dst.addr.id = MAP_X86_REGISTER(X86_REG_EDX);
             break;
         case SHD_SIZE_u64:
             arg->dst.addr.id = MAP_X86_REGISTER(X86_REG_RAX);
             arg->dst.size = SHD_SIZE_u64;
-            err = SHD_copy_conservative(arg->src,&arg->dst);
+            err = SHD_add_sub(arg->src,arg->dst,&arg->dst);
             OUTPUT_ERROR(err,arg,"Mul");
             arg->dst.addr.id = MAP_X86_REGISTER(X86_REG_RDX);
             break;
@@ -291,7 +291,7 @@ static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
             assert(0);
     }
     DEBUG_OUTPUT(arg,"taint_cb_MUL_DIV");
-    err = SHD_copy_conservative(arg->src,&arg->dst); //the first propagation for 1 byte case, and the 2nd otherwise.
+    err = SHD_add_sub(arg->src,arg->dst,&arg->dst);//the first propagation for 1 byte case, and the 2nd otherwise.
 
     shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
     SHD_copy_conservative(arg->dst,&flags);

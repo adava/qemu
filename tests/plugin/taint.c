@@ -101,13 +101,18 @@ static inline inst_callback_argument *analyze_Operands(cs_x86_op *operands,int n
         case 1:
             analyzeOp(&res->src, operands[0]);;
             break;
-        default:
+        case 2:
             analyzeOp(&res->src, operands[0]);
             analyzeOp(&res->dst, operands[1]);
             break;
-    }
-    if (numOps>2){
-        printf("WARNING: more than two operands=%d\n",numOps);
+        case 3:
+            analyzeOp(&res->src, operands[0]);
+            analyzeOp(&res->src2, operands[1]);
+            analyzeOp(&res->dst, operands[2]);
+            break;
+        default:
+            printf("WARNING: more than three operands=%d\n",numOps);
+            break;
     }
     return res;
 }
@@ -233,7 +238,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                     copy_inq(cb_args->dst, cb_args->src); //copy dst to src
                 }
                 else{
-//                    copy_inq(cb_args->dst,cb_args->src2);
+                    copy_inq(cb_args->dst,cb_args->src2);
                     cb = taint_cb_ADD_SUB;
                 }
                 nice_print(cs_ptr);
@@ -295,6 +300,21 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb = taint_cb_XCHG;
                 nice_print(cs_ptr);
                 break;
+            case X86_INS_IMUL:
+            case X86_INS_IDIV:
+                if (inst_det->op_count==2){
+                    copy_inq(cb_args->dst, cb_args->src2);
+                    cb = taint_cb_ADD_SUB;
+                    nice_print(cs_ptr);
+                    break;
+                }
+                else if (inst_det->op_count==3){
+                    copy_inq(cb_args->src2, cb_args->src); //copy dst to src
+                    cb = taint_cb_EXTENDL; //we need a left extension
+//                    print_ops(cs_ptr->mnemonic, cs_ptr->op_str);
+                    nice_print(cs_ptr);
+                    break;
+                }
             case X86_INS_MUL:
             case X86_INS_DIV:
                 cb = taint_cb_MUL_DIV;

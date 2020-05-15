@@ -134,13 +134,13 @@ static char *get_type(char* op){
 
 static inline void print_ops(char *opcode, char *i_dis){
     int i = 1;
-    char *ops[3];
+    char *ops[4];
     ops[0] = opcode;
     char *ins_copy = strdup(i_dis);
     char* token = strtok(ins_copy, ",");
 
     // Keep separating tokens
-    while (token != NULL && i<3) {
+    while (token != NULL && i<4) {
         ops[i++] = token;
         //printf("%s\n", token);
         token = strtok(NULL, ",");
@@ -157,6 +157,9 @@ static inline void print_ops(char *opcode, char *i_dis){
             break;
         case 3:
             d_str = g_strdup_printf("UNSUPPORTED opcode: %s, op1: %s (%s), op2: %s (%s)\n", ops[0], ops[1], get_type(ops[1]), ops[2], get_type(ops[2]));
+            break;
+        case 4:
+            d_str = g_strdup_printf("UNSUPPORTED opcode: %s, op1: %s (%s), op2: %s (%s), op3: %s (%s)\n", ops[0], ops[1], get_type(ops[1]), ops[2], get_type(ops[2]), ops[3], get_type(ops[3]));
             break;
         default:
             g_assert_not_reached();
