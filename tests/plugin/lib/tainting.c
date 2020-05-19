@@ -20,9 +20,10 @@
                                     plugin_mem_read(inq.addr.vaddr,inq.size,buf);\
                                     break;\
                                 case IMMEDIATE:\
+                                    *(uint64_t *)buf = inq.addr.vaddr; \
                                     break;\
                                 default:\
-                                    assert(0);\
+                                    break;\
                             }
 
 
@@ -233,12 +234,10 @@ static void taint_cb_AND_OR(unsigned int cpu_index, void *udata){
     shadow_err err = 0;
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_AND_OR");
-    uint8_t buf_src_val[SHD_SIZE_MAX]={0};
-    uint8_t buf_dst_val[SHD_SIZE_MAX]={0};
-    READ_VALUE(arg->src,buf_src_val);
-    READ_VALUE(arg->dst,buf_dst_val);
+//    g_autofree gchar *report = g_strdup_printf("\nin taint_cb_AND_OR, read values src_val=%lx, dst_val=%lx\n",arg->vals->src_val,arg->vals->dst_val);
+//    qemu_plugin_outs(report);
 
-    err = SHD_and_or(arg->src,&arg->dst,buf_src_val,buf_dst_val,arg->operation);
+    err = SHD_and_or(arg->src,&arg->dst,(void *)&arg->vals->src_val,(void *)&arg->vals->dst_val,arg->operation);
     shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
     SHD_copy_conservative(arg->dst,&flags);
     OUTPUT_ERROR(err,arg,"XCHG");

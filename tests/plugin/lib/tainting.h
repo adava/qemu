@@ -14,12 +14,20 @@ typedef struct{
 } mem_callback_argument;
 
 typedef struct{
+    uint64_t src_val;
+    uint64_t dst_val;
+    uint64_t src2_val;
+} inst_callback_values;
+
+typedef struct{
     shad_inq src;
     shad_inq dst;
     instruction_operation operation;
     shad_inq src2;
-    shad_inq src3;
+    shad_inq src3; //When effective address calculation is needed e.g. LEA
+    inst_callback_values *vals;
 } inst_callback_argument;
+
 
 typedef enum {
     BEFORE,
@@ -37,6 +45,9 @@ static void taint_cb_XCHG(unsigned int cpu_index, void *udata);
 static void taint_cb_AND_OR(unsigned int cpu_index, void *udata);
 static void taint_cb_TEST(unsigned int cpu_index, void *udata);
 static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata);
+static void taint_cb_RET(unsigned int cpu_index, void *udata);
+static void taint_cb_CALL(unsigned int cpu_index, void *udata);
+static void taint_cb_JUMP(unsigned int cpu_index, void *udata);
 static void taint_list_all(void);
 GString *report;
 #endif //QEMU_TAINTING_H

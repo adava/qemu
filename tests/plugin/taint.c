@@ -28,6 +28,8 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
+#define ALLOC_SET0(ptr,type) ptr = malloc(sizeof(type)); \
+                             memset(ptr,0,sizeof(type));
 typedef enum {
     COUNT_CLASS,
     COUNT_INDIVIDUAL,
@@ -130,6 +132,15 @@ static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
         assert(0);
     }
     DEBUG_MEMCB_OUTPUT(arg->addr);
+}
+
+static void op_record_values(unsigned int cpu_index, void *udata) {
+    INIT_ARG(arg,udata);
+    READ_VALUE(arg->src,&arg->vals->src_val);
+    READ_VALUE(arg->src2,&arg->vals->src2_val);
+    READ_VALUE(arg->dst,&arg->vals->dst_val);
+//    g_autofree gchar *report = g_strdup_printf("in op_record_values!\n");
+//    qemu_plugin_outs(report);
 }
 
 
@@ -289,6 +300,9 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_OR:
                 set_opId(cs_ptr->id,cb_args->operation);
                 cb = taint_cb_AND_OR;
+                ALLOC_SET0(cb_args->vals,inst_callback_values);
+                qemu_plugin_register_vcpu_insn_exec_cb(
+                        insn, op_record_values , QEMU_PLUGIN_CB_NO_REGS, (void *)cb_args);
 //                cbType = BEFORE;
                 nice_print(cs_ptr);
                 break;
