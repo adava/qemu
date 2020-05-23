@@ -53,23 +53,39 @@
 #endif
 
 #ifdef LOG_INS
-static inline void nice_print(cs_insn *insn)
-{
-    if (insn->id == X86_INS_CMP){
-        g_autofree gchar *report  = g_strdup_printf("num_operands: %d, op1=%"PRIu32", op2=%"PRIu32"\n",insn->detail->x86.op_count, insn->detail->x86.operands[0].reg, insn->detail->x86.operands[1].reg);
-        qemu_plugin_outs(report);
-    }
-    if(insn->id == X86_INS_LEA){
-        g_autoptr(GString) out = g_string_new("*X86_INS_LEA*\t");
-        print_mem_op(&insn->detail->x86.operands[0].mem,out);
-        qemu_plugin_outs(out->str);
-    }
-    print_id_groups(insn);
-}
+
+#define nice_print(insn) print_id_groups(insn)
 
 #else
 
-#define nice_print(insn)
+static inline void nice_print(cs_insn *insn)
+{
+//    gchar *out;
+//    GString *report;
+    switch(insn->id) {
+//        case X86_INS_CMP:
+//            out = g_strdup_printf("num_operands: %d, op1=%" PRIu32 ", op2=%" PRIu32 "\n", insn->detail->x86.op_count, insn->detail->x86.operands[0].reg, insn->detail->x86.operands[1].reg);
+//            qemu_plugin_outs(out);
+//            break;
+//        case X86_INS_LEA:
+//            report = g_string_new("*X86_INS_LEA*\t");
+//            print_mem_op(&insn->detail->x86.operands[0].mem, report);
+//            qemu_plugin_outs(report->str);
+//            break;
+//        case X86_INS_CQO: //cqto
+//        case X86_INS_CLTS:
+//        case X86_INS_CWD:
+//        case X86_INS_CWDE:
+//        case X86_INS_CDQ:
+//        case X86_INS_CDQE: //cltq
+//            print_id_groups(insn);
+        default:
+            break;
+    }
+
+}
+
+
 
 #endif
 
@@ -342,6 +358,65 @@ static void taint_cb_RET(unsigned int cpu_index, void *udata) { //reverse of CAL
     SHD_value jmp_addr = SHD_get_shadow(arg->dst);
     jmp_addr!=0?(err=1):(err=0);
     OUTPUT_ERROR(err,arg,"RET *** destination function address is tainted ***");
+}
+
+static void taint_cb_CPUID(unsigned int cpu_index, void *udata){
+    shadow_err err = 0;
+    INIT_ARG(arg,udata);
+    DEBUG_OUTPUT(arg,"taint_cb_CPUID");
+    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RAX);
+    arg->src.type=GLOBAL;
+    arg->src.size=SHD_SIZE_u64;
+    err = SHD_clear(&arg->src);
+    OUTPUT_ERROR(err,arg,"CPUID error clearing RAX");
+
+    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RBX);
+    err = SHD_clear(&arg->src);
+    OUTPUT_ERROR(err,arg,"CPUID error clearing RBX");
+
+    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RCX);
+    err = SHD_clear(&arg->src);
+    OUTPUT_ERROR(err,arg,"CPUID error clearing RCX");
+
+    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RDX);
+    err = SHD_clear(&arg->src);
+    OUTPUT_ERROR(err,arg,"CPUID error clearing RDX");
+}
+
+static void taint_cb_RDTSC(unsigned int cpu_index, void *udata){
+    shadow_err err = 0;
+    INIT_ARG(arg,udata);
+    DEBUG_OUTPUT(arg,"taint_cb_RDTSC");
+    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RAX);
+    arg->src.type=GLOBAL;
+    arg->src.size=SHD_SIZE_u64;
+    err = SHD_clear(&arg->src);
+    OUTPUT_ERROR(err,arg,"RDTSC error clearing RAX");
+
+    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RDX);
+    err = SHD_clear(&arg->src);
+    OUTPUT_ERROR(err,arg,"RDTSC error clearing RDX");
+}
+
+static void taint_cb_LEAVE(unsigned int cpu_index, void *udata){
+    shadow_err err = 0;
+    INIT_ARG(arg,udata);
+
+    arg->src2.addr.id=MAP_X86_REGISTER(X86_REG_RBP);
+    arg->src2.type=GLOBAL;
+    arg->src2.size=SHD_SIZE_u64;
+
+    arg->dst.addr.id=MAP_X86_REGISTER(X86_REG_RSP);
+    arg->dst.type=GLOBAL;
+    arg->dst.size=SHD_SIZE_u64;
+
+    DEBUG_OUTPUT(arg,"taint_cb_LEAVE");
+//    g_autofree gchar *report = g_strdup_printf("\nin taint_cb_LEAVE, mem_addr=0x%lx\n",arg->src.addr.vaddr);
+//    qemu_plugin_outs(report);
+    err = SHD_copy(arg->src2,&arg->dst);
+    OUTPUT_ERROR(err,arg,"LEAVE error copying RBP shadow to RSP");
+    err = SHD_copy(arg->src,&arg->src2);
+    OUTPUT_ERROR(err,arg,"LEAVE error copying MEM shadow to RBP");
 }
 
 static void print_shadow(gpointer key, gpointer value){

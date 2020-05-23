@@ -48,6 +48,9 @@ static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata);
 static void taint_cb_RET(unsigned int cpu_index, void *udata);
 static void taint_cb_CALL(unsigned int cpu_index, void *udata);
 static void taint_cb_JUMP(unsigned int cpu_index, void *udata);
+static void taint_cb_CPUID(unsigned int cpu_index, void *udata);
+static void taint_cb_RDTSC(unsigned int cpu_index, void *udata);
+static void taint_cb_LEAVE(unsigned int cpu_index, void *udata);
 static void taint_list_all(void);
 GString *report;
 #endif //QEMU_TAINTING_H

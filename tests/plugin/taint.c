@@ -270,6 +270,52 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb = taint_cb_EXTENDL;
                 nice_print(cs_ptr);
                 break;
+            case X86_INS_CBW:
+                ALLOC_SET0(cb_args,inst_callback_argument)
+                cb_args->src.type = GLOBAL;
+                cb_args->src.addr.id = R_AL;
+                cb_args->src.size = SHD_SIZE_u8;
+                cb_args->dst.type = GLOBAL;
+                cb_args->dst.addr.id = R_AH;
+                cb_args->dst.size = SHD_SIZE_u8;
+                cb = taint_cb_EXTENDL;
+                nice_print(cs_ptr);
+                break;
+            case X86_INS_CWD:
+            ALLOC_SET0(cb_args,inst_callback_argument)
+                cb_args->src.type = GLOBAL;
+                cb_args->src.addr.id = R_EAX;
+                cb_args->src.size = SHD_SIZE_u16;
+                cb_args->dst.type = GLOBAL;
+                cb_args->dst.addr.id = R_EDX;
+                cb_args->dst.size = SHD_SIZE_u16;
+                cb = taint_cb_EXTENDL;
+                nice_print(cs_ptr);
+                break;
+            case X86_INS_CWDE:
+            case X86_INS_CQO: //cqto
+                ALLOC_SET0(cb_args,inst_callback_argument)
+                cb_args->src.type = GLOBAL;
+                cb_args->src.addr.id = R_EAX;
+                cb_args->src.size = SHD_SIZE_u16;
+                cb_args->dst.type = GLOBAL;
+                cb_args->dst.addr.id = R_EAX;
+                cb_args->dst.size = SHD_SIZE_u32;
+                cb = taint_cb_EXTENDL;
+                nice_print(cs_ptr);
+                break;
+            case X86_INS_CDQ:
+            case X86_INS_CDQE: //cltq
+                ALLOC_SET0(cb_args,inst_callback_argument)
+                cb_args->src.type = GLOBAL;
+                cb_args->src.addr.id = R_EAX;
+                cb_args->src.size = SHD_SIZE_u32;
+                cb_args->dst.type = GLOBAL;
+                cb_args->dst.addr.id = R_EAX;
+                cb_args->dst.size = SHD_SIZE_u64;
+                cb = taint_cb_EXTENDL;
+                nice_print(cs_ptr);
+                break;
             case X86_INS_MOVSX:
             case X86_INS_MOVSXD:
                 cb = taint_cb_EXTENDL;
@@ -387,6 +433,24 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb_args->dst.size = SHD_SIZE_u64;
                 cb = taint_cb_RET;
                 cbType = BEFORE;
+                nice_print(cs_ptr);
+                break;
+            case X86_INS_CPUID:
+                ALLOC_SET0(cb_args,inst_callback_argument)
+                cb = taint_cb_CPUID;
+                nice_print(cs_ptr);
+                break;
+            case X86_INS_RDTSC:
+                //print_ops(cs_ptr->mnemonic, cs_ptr->op_str);
+                ALLOC_SET0(cb_args,inst_callback_argument)
+                cb = taint_cb_RDTSC;
+                nice_print(cs_ptr);
+                break;
+            case X86_INS_LEAVE:
+                ALLOC_SET0(cb_args,inst_callback_argument)
+                cb_args->src.type = MEMORY;
+                cb_args->src.size = SHD_SIZE_u64;
+                cb = taint_cb_LEAVE;
                 nice_print(cs_ptr);
                 break;
             default:
