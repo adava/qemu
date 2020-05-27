@@ -126,6 +126,9 @@ static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
     if (udata!=NULL){
         arg = (mem_callback_argument *)udata;
         *(arg->addr) = vaddr;
+        if (arg->args!=NULL && arg->callback!=NULL){
+            arg->callback(cpu_index, (void *)arg->args);
+        }
 //        free(udata);
     }
     else{
@@ -218,10 +221,43 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
         cb_args = analyze_Operands(inst_det->operands,inst_det->op_count);
 
         switch(cs_ptr->id){
+            case X86_INS_CMOVA:
+            case X86_INS_CMOVAE:
+            case X86_INS_CMOVB:
+            case X86_INS_CMOVBE:
+            case X86_INS_CMOVE:
+            case X86_INS_CMOVG:
+            case X86_INS_CMOVGE:
+            case X86_INS_CMOVL:
+            case X86_INS_CMOVLE:
+            case X86_INS_CMOVNE:
+            case X86_INS_CMOVNO:
+            case X86_INS_CMOVNP:
+            case X86_INS_CMOVNS:
+            case X86_INS_CMOVO:
+            case X86_INS_CMOVP:
+            case X86_INS_CMOVS:
+            /* the above should propagate conditionally but we approximate here by always propagating. The src is never imm for them so the check below never applies */
+//            case X86_INS_MOVD:
+            /* MOVD can also be used for XMM but rn only r/m32, mm and reverse would work */
             case X86_INS_MOVZX:
             case X86_INS_MOV:
                  //better to take this outside, and set it to NULL for otherwise case
                 cb_args->src.type==IMMEDIATE?(cb = taint_cb_clear):(cb = taint_cb_mov);
+                nice_print(cs_ptr);
+                break;
+            case X86_INS_BSF:
+            case X86_INS_BSR:
+                //similar to mov but also affects flags
+                cb = taint_cb_movwf;
+                nice_print(cs_ptr);
+                break;
+            case X86_INS_BT:
+            case X86_INS_BTC:
+            case X86_INS_BTR:
+            case X86_INS_BTS:
+                //only propagate conservatively to the flags
+                cb = taint_cb_SETF;
                 nice_print(cs_ptr);
                 break;
             case X86_INS_PUSH:
@@ -360,6 +396,10 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb = taint_cb_XCHG;
                 nice_print(cs_ptr);
                 break;
+            case X86_INS_CMPXCHG:
+                cb = taint_cb_CMPCHG;
+                nice_print(cs_ptr);
+                break;
             case X86_INS_IMUL:
             case X86_INS_IDIV:
                 if (inst_det->op_count==2){
@@ -409,7 +449,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 //            case X86_INS_JRCXZ: special instruction, checks registers instead of flags
             case X86_INS_JMP:
                 cb = taint_cb_JUMP;
-                cbType = BEFORE;
+                cbType = cb_args->src.type==MEMORY?INMEM:BEFORE;
                 nice_print(cs_ptr);
                 break;
             case X86_INS_CALL:
@@ -453,6 +493,45 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb = taint_cb_LEAVE;
                 nice_print(cs_ptr);
                 break;
+            case X86_INS_SETAE:
+            case X86_INS_SETA:
+            case X86_INS_SETBE:
+            case X86_INS_SETB:
+            case X86_INS_SETE:
+            case X86_INS_SETGE:
+            case X86_INS_SETG:
+            case X86_INS_SETLE:
+            case X86_INS_SETL:
+            case X86_INS_SETNE:
+            case X86_INS_SETNO:
+            case X86_INS_SETNP:
+            case X86_INS_SETNS:
+            case X86_INS_SETO:
+            case X86_INS_SETP:
+            case X86_INS_SETS:
+                copy_inq(cb_args->src,cb_args->dst);
+                cb_args->src.addr.id = 0;
+                cb_args->src.type = FLAG;
+                cb_args->src.size = SHD_SIZE_u8;
+                cb = taint_cb_mov;
+                nice_print(cs_ptr);
+                break;
+            case X86_INS_STOSB:
+            case X86_INS_STOSW:
+            case X86_INS_STOSD:
+            case X86_INS_STOSQ:
+                //the problem is that inserting the cb after the instruction is too late (never hit), and before is too soon; we don't have the address.
+                //we should compute the effective address
+                copy_inq(cb_args->src,cb_args->dst);
+                cb_args->src.addr.id=MAP_X86_REGISTER(X86_REG_RAX);
+                cb_args->src.type=GLOBAL;
+//                cb_args->src.size=cb_args->dst.size; already set to that
+                cb = taint_cb_mov;
+//                cb = taint_cb_STOS;
+                cbType = INMEM;
+//                print_ops(cs_ptr->mnemonic, cs_ptr->op_str);
+                nice_print(cs_ptr);
+                break;
             default:
                 free(cb_args);
                 cb_args = NULL;
@@ -464,11 +543,11 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             //usr_data should be allocated
             usr_data = (void*)cb_args;
             if (cb_args->src.type == MEMORY){
-                mem_cb_arg = malloc(sizeof(mem_callback_argument));
+                ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->src.addr.vaddr);
             }
             else if (cb_args->dst.type == MEMORY){
-                mem_cb_arg = malloc(sizeof(mem_callback_argument));
+                ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->dst.addr.vaddr);
             }
         }
@@ -479,15 +558,23 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
         }
         //register the selected callback
         if(cb!=NULL && usr_data!=NULL){
-            if(cbType==AFTER){
-                qemu_plugin_register_vcpu_after_insn_exec_cb(
-                        insn, cb , QEMU_PLUGIN_CB_NO_REGS, usr_data);
+            switch(cbType){
+                case AFTER:
+                    qemu_plugin_register_vcpu_after_insn_exec_cb(
+                            insn, cb , QEMU_PLUGIN_CB_NO_REGS, usr_data);
+                    break;
+                case BEFORE:
+                    qemu_plugin_register_vcpu_insn_exec_cb(
+                            insn, cb , QEMU_PLUGIN_CB_NO_REGS, usr_data);
+                    break;
+                case INMEM:
+                    mem_cb_arg->args = cb_args;
+                    mem_cb_arg->callback = cb;
+                    break;
+                default:
+                    printf("this callback type is not supported!\n");
+                    assert(0);
             }
-            else{
-                qemu_plugin_register_vcpu_insn_exec_cb(
-                        insn, cb , QEMU_PLUGIN_CB_NO_REGS, usr_data);
-            }
-
         }
 
         }

@@ -64,6 +64,7 @@ static inline void nice_print(cs_insn *insn)
 //    GString *report;
     switch(insn->id) {
 //        case X86_INS_CMP:
+//        case X86_INS_CMPXCHG:
 //            out = g_strdup_printf("num_operands: %d, op1=%" PRIu32 ", op2=%" PRIu32 "\n", insn->detail->x86.op_count, insn->detail->x86.operands[0].reg, insn->detail->x86.operands[1].reg);
 //            qemu_plugin_outs(out);
 //            break;
@@ -78,7 +79,12 @@ static inline void nice_print(cs_insn *insn)
 //        case X86_INS_CWDE:
 //        case X86_INS_CDQ:
 //        case X86_INS_CDQE: //cltq
+//        case X86_INS_STOSB:
+//        case X86_INS_STOSW:
+//        case X86_INS_STOSD:
+//        case X86_INS_STOSQ:
 //            print_id_groups(insn);
+//            break;
         default:
             break;
     }
@@ -157,6 +163,54 @@ static void taint_cb_mov(unsigned int cpu_index, void *udata){ //use taint_cb pr
 //    free(udata); //no need to free right away, a cb for an instance of an instruction might be called several times!
 }
 
+//static void taint_cb_STOS(unsigned int cpu_index, void *udata){ //would have been usefull if the CB after STOS would be hit which is not the case
+//    shadow_err err = 0;
+//    INIT_ARG(arg,udata);
+//    DEBUG_OUTPUT(arg,"taint_cb_STOS");
+//    uint8_t value=0;
+//    uint8_t buf_dst_val[SHD_SIZE_MAX]={0};
+//    read repetition size from the guest, the callback would be called ecx times so no need to
+//    shad_inq regECX = {.addr.id=MAP_X86_REGISTER(X86_REG_RCX),.type=GLOBAL, .size=SHD_SIZE_u32};
+//    READ_VALUE(regECX,buf_dst_val);
+//    uint32_t count = *(uint32_t *)(buf_dst_val);
+//    shad_inq regEAX = {.addr.id=MAP_X86_REGISTER(X86_REG_RAX),.type=GLOBAL, .size=SHD_SIZE_u32};
+//    g_autofree gchar *report = g_strdup_printf("\nin taint_cb_STOS, type=%d addr_src=0x%lx dst_type=%d, addr_dst=%d\n",arg->src.type,arg->src.addr.vaddr,arg->dst.type, arg->dst.addr.id);
+//    qemu_plugin_outs(report);
+//
+////    read EAX shadow and pessimistically convert it to one byte
+
+//    SHD_value eax_shadow = SHD_get_shadow(regEAX);
+//    err = SHD_cast(&eax_shadow,sizeof(SHD_value),&value,sizeof(uint8_t));
+//    OUTPUT_ERROR(err,arg,"STOS error casting EAX taint");
+////    finally copy
+//    err = SHD_write_contiguous(arg->src.addr.vaddr, count, value);
+//    OUTPUT_ERROR(err,arg,"STOS error copy");
+//}
+
+
+static void taint_cb_movwf(unsigned int cpu_index, void *udata){ //use taint_cb prefix instead of SHD
+    shadow_err err = 0;
+    INIT_ARG(arg,udata);
+    DEBUG_OUTPUT(arg,"taint_cb_movwf");
+
+    err = SHD_copy(arg->src,&arg->dst);
+    OUTPUT_ERROR(err,arg,"MOV");
+
+    shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
+    err = SHD_copy_conservative(arg->dst,&flags);
+    OUTPUT_ERROR(err,arg,"MOV flags propagation");
+}
+
+static void taint_cb_SETF(unsigned int cpu_index, void *udata){
+    shadow_err err = 0;
+    INIT_ARG(arg,udata);
+    DEBUG_OUTPUT(arg,"taint_cb_SETF");
+
+    shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
+    err = SHD_copy_conservative(arg->src,&flags);
+    OUTPUT_ERROR(err,arg,"FLAG propagation");
+}
+
 static void taint_cb_clear(unsigned int cpu_index, void *udata){
     shadow_err err = 0;
     INIT_ARG(arg,udata);
@@ -228,6 +282,19 @@ static void taint_cb_XOR(unsigned int cpu_index, void *udata){
     shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
     SHD_copy_conservative(arg->dst,&flags);
     OUTPUT_ERROR(err,arg,"XOR");
+}
+
+/* A precise rule would need reading RAX and destination value before this instruction.
+ * Here, we approximate by propagating based on either results of the instruction execution. */
+static void taint_cb_CMPCHG(unsigned int cpu_index, void *udata){
+    shadow_err err = 0;
+    INIT_ARG(arg,udata);
+    DEBUG_OUTPUT(arg,"taint_cb_CMPCHG");
+    shad_inq regEAX = {.addr.id=MAP_X86_REGISTER(X86_REG_RAX),.type=GLOBAL, .size=arg->dst.size};
+    err = SHD_union(arg->dst,&regEAX); //if eax=dst part that we conservatively propagate
+    OUTPUT_ERROR(err,arg,"CMPCHG propagate from dst to EAX");
+    err = SHD_union(arg->src,&arg->dst); //else EAX=dst that again we conservatively propagate
+    OUTPUT_ERROR(err,arg,"CMPCHG propagate from src to dst");
 }
 
 static void taint_cb_SR(unsigned int cpu_index, void *udata){

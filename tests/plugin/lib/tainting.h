@@ -9,11 +9,6 @@
 #define TAINTING_H
 
 typedef struct{
-    char *operand;
-    uint64_t *addr;
-} mem_callback_argument;
-
-typedef struct{
     uint64_t src_val;
     uint64_t dst_val;
     uint64_t src2_val;
@@ -28,10 +23,17 @@ typedef struct{
     inst_callback_values *vals;
 } inst_callback_argument;
 
+typedef struct{
+    char *operand;
+    uint64_t *addr;
+    inst_callback_argument *args;
+    qemu_plugin_vcpu_udata_cb_t callback;
+} mem_callback_argument;
 
 typedef enum {
     BEFORE,
-    AFTER
+    AFTER,
+    INMEM
 } CB_TYPE;
 
 static void taint_cb_mov(unsigned int cpu_index, void *udata);
@@ -51,6 +53,8 @@ static void taint_cb_JUMP(unsigned int cpu_index, void *udata);
 static void taint_cb_CPUID(unsigned int cpu_index, void *udata);
 static void taint_cb_RDTSC(unsigned int cpu_index, void *udata);
 static void taint_cb_LEAVE(unsigned int cpu_index, void *udata);
+static void taint_cb_movwf(unsigned int cpu_index, void *udata);
+static void taint_cb_SETF(unsigned int cpu_index, void *udata);
 static void taint_list_all(void);
 GString *report;
 #endif //QEMU_TAINTING_H
