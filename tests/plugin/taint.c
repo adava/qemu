@@ -61,7 +61,7 @@ static inline void analyzeOp(shad_inq *inq, cs_x86_op operand){
         printf("operand.reg=%x name=%s, mapped_val=%x\n",operand.reg,get_reg_name(operand.reg),inq->addr.id);
         assert(0);
     }
-    inq->size = operand.size;
+    inq->size = operand.size<SHD_SIZE_MAX?operand.size:SHD_SIZE_u64;
 }
 
 static inline qemu_plugin_vcpu_udata_cb_t analyze_LEA_Addr(inst_callback_argument *res, x86_op_mem *mem_op){ //assumes segment would not be tainted
@@ -240,6 +240,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             /* the above should propagate conditionally but we approximate here by always propagating. The src is never imm for them so the check below never applies */
 //            case X86_INS_MOVD:
             /* MOVD can also be used for XMM but rn only r/m32, mm and reverse would work */
+            case X86_INS_MOVABS:
             case X86_INS_MOVZX:
             case X86_INS_MOV:
                  //better to take this outside, and set it to NULL for otherwise case
@@ -533,9 +534,26 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 nice_print(cs_ptr);
                 break;
             default:
-                free(cb_args);
-                cb_args = NULL;
-                handle_unsopported_ins(cs_ptr, unsupported_ins_log);
+                if(inst_det->op_count==2){ // a majority of SSE instructions are handled here
+                    cb = cb_args->src.type==IMMEDIATE? taint_cb_clear : taint_cb_conservative;
+                    nice_print(cs_ptr);
+                }
+                else if(inst_det->op_count==3){
+                    if (cb_args->src.type==IMMEDIATE){
+                        copy_inq(cb_args->src2,cb_args->src);
+                        cb = taint_cb_conservative;
+                        nice_print(cs_ptr);
+                    }
+                    else if(cb_args->src2.type==IMMEDIATE){
+                        cb = taint_cb_conservative;
+                        nice_print(cs_ptr);
+                    }
+                }
+                else{
+                    free(cb_args);
+                    cb_args = NULL;
+                    handle_unsopported_ins(cs_ptr, unsupported_ins_log);
+                }
                 break;
         }
         //register memory callback to get the vaddr if one of the operands is mem

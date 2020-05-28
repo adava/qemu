@@ -32,7 +32,8 @@ enum {
     R_DH = 18,
     R_BH = 19,
     R_EXTRA = 20,
-    R_EIP = 21
+    R_EIP = 21,
+    R_OTHERS
 };
 
 #endif //QEMU_UTILITY_H

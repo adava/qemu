@@ -9,7 +9,7 @@
 static uint32_t x86_regs_mapping[X86_REG_ENDING] = {INVALID_REGISTER};
 void init_register_mapping(void);
 
-#define NUM_MAPPED_REGISTERS 46
+#define NUM_MAPPED_REGISTERS 86
 const uint32_t caps_x86_regs[NUM_MAPPED_REGISTERS] = {
         X86_REG_AH, // R_AH
         X86_REG_AL, //R_AL
@@ -57,6 +57,47 @@ const uint32_t caps_x86_regs[NUM_MAPPED_REGISTERS] = {
         X86_REG_R14, //R_R14
         X86_REG_R15, //R_R15
         X86_REG_RIP,
+        X86_REG_MM0,
+        X86_REG_MM1,
+        X86_REG_MM2,
+        X86_REG_MM3,
+        X86_REG_MM4,
+        X86_REG_MM5,
+        X86_REG_MM6,
+        X86_REG_MM7,
+        X86_REG_XMM0,
+        X86_REG_XMM1,
+        X86_REG_XMM2,
+        X86_REG_XMM3,
+        X86_REG_XMM4,
+        X86_REG_XMM5,
+        X86_REG_XMM6,
+        X86_REG_XMM7,
+        X86_REG_XMM8,
+        X86_REG_XMM9,
+        X86_REG_XMM10,
+        X86_REG_XMM11,
+        X86_REG_XMM12,
+        X86_REG_XMM13,
+        X86_REG_XMM14,
+        X86_REG_XMM15,
+        X86_REG_XMM16,
+        X86_REG_XMM17,
+        X86_REG_XMM18,
+        X86_REG_XMM19,
+        X86_REG_XMM20,
+        X86_REG_XMM21,
+        X86_REG_XMM22,
+        X86_REG_XMM23,
+        X86_REG_XMM24,
+        X86_REG_XMM25,
+        X86_REG_XMM26,
+        X86_REG_XMM27,
+        X86_REG_XMM28,
+        X86_REG_XMM29,
+        X86_REG_XMM30,
+        X86_REG_XMM31,
+
 };
 
 const uint32_t qemu_x86_regs[NUM_MAPPED_REGISTERS] = {
@@ -105,7 +146,47 @@ const uint32_t qemu_x86_regs[NUM_MAPPED_REGISTERS] = {
         R_R13,
         R_R14,
         R_R15,
-        R_EIP
+        R_EIP,
+        X86_REG_MM0,
+        X86_REG_MM1,
+        X86_REG_MM2,
+        X86_REG_MM3,
+        X86_REG_MM4,
+        X86_REG_MM5,
+        X86_REG_MM6,
+        X86_REG_MM7,
+        X86_REG_XMM0,
+        X86_REG_XMM1,
+        X86_REG_XMM2,
+        X86_REG_XMM3,
+        X86_REG_XMM4,
+        X86_REG_XMM5,
+        X86_REG_XMM6,
+        X86_REG_XMM7,
+        X86_REG_XMM8,
+        X86_REG_XMM9,
+        X86_REG_XMM10,
+        X86_REG_XMM11,
+        X86_REG_XMM12,
+        X86_REG_XMM13,
+        X86_REG_XMM14,
+        X86_REG_XMM15,
+        X86_REG_XMM16,
+        X86_REG_XMM17,
+        X86_REG_XMM18,
+        X86_REG_XMM19,
+        X86_REG_XMM20,
+        X86_REG_XMM21,
+        X86_REG_XMM22,
+        X86_REG_XMM23,
+        X86_REG_XMM24,
+        X86_REG_XMM25,
+        X86_REG_XMM26,
+        X86_REG_XMM27,
+        X86_REG_XMM28,
+        X86_REG_XMM29,
+        X86_REG_XMM30,
+        X86_REG_XMM31,
 };
 
 void init_register_mapping(void){

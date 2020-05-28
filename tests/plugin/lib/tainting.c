@@ -102,10 +102,11 @@ static inline void handle_unsopported_ins(cs_insn *cs_i, GHashTable *log){
     if (!instance) {
         inst = strdup(cs_i->mnemonic);
         g_hash_table_insert(log, GUINT_TO_POINTER(cs_i->id),(gpointer)inst);
-    }
 #ifdef LOG_INS
-    print_ops(cs_i->mnemonic, cs_i->op_str);
+        print_ops(cs_i->mnemonic, cs_i->op_str);
+        print_id_groups(cs_i);
 #endif
+    }
     //log(report,"0x%lx -> 0x%lx!\n",id,shadow);
 }
 
@@ -484,6 +485,14 @@ static void taint_cb_LEAVE(unsigned int cpu_index, void *udata){
     OUTPUT_ERROR(err,arg,"LEAVE error copying RBP shadow to RSP");
     err = SHD_copy(arg->src,&arg->src2);
     OUTPUT_ERROR(err,arg,"LEAVE error copying MEM shadow to RBP");
+}
+static void taint_cb_conservative(unsigned int cpu_index, void *udata){
+    shadow_err err = 0;
+    INIT_ARG(arg,udata);
+    DEBUG_OUTPUT(arg,"taint_cb_conservative");
+
+    err = SHD_copy_conservative(arg->src,&arg->dst);
+    OUTPUT_ERROR(err,arg,"Conservative copy");
 }
 
 static void print_shadow(gpointer key, gpointer value){

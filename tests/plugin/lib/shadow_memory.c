@@ -55,7 +55,7 @@ static inline uint64_t convert_value(void *value, uint8_t size){
             temp = (SHD_value)(*(uint64_t*)value);
             break;
         default:
-            printf("unknown size for conversion!\n");
+            printf("unknown size=%d for conversion!\n", size);
             assert(0);
             break;
     }
