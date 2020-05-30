@@ -39,6 +39,7 @@ typedef enum {
 static bool do_inline;
 static bool verbose;
 GHashTable *unsupported_ins_log;
+GHashTable *syscall_rets;
 
 static inline void analyzeOp(shad_inq *inq, cs_x86_op operand){
     switch(operand.type){
@@ -171,6 +172,7 @@ static void plugin_init(void)
 {
     g_autoptr(GString) report = g_string_new("Initialization:\n");
     unsupported_ins_log =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
+    syscall_rets =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     init_register_mapping();
     SHD_init();
     g_string_append_printf(report,"Done!\n");
@@ -185,11 +187,14 @@ static void syscall_callback(qemu_plugin_id_t id, unsigned int vcpu_index,
 {
     g_autoptr(GString) out = g_string_new("******system call*******");
     g_string_append_printf(out,"\tnum: %"PRIu64"\n", num);
-    // For read system call, num==0, a2 holds the buffer address (to which the read bytes are written) and a3 holds the number of read bytes.
+    // For read system call, num==0, a2 holds the buffer address (to which the read bytes are written) and a3 holds the buff size.
     if(num==0 && a1==0){ //only standard in; a1==0
-        uint8_t value = 0xff;
-        SHD_write_contiguous(a2, a3,value);
-        g_string_append_printf(out,"TAINTING SOURCE\t a1: %" PRIu64" , source addr: 0x%lx , len: %" PRIu64 "\n",
+//        uint8_t value = 0xff;
+//        SHD_write_contiguous(a2, a3,value);
+        uint64_t *vaddr = g_new0(uint64_t,1);
+        *vaddr = a2;
+        g_hash_table_insert(syscall_rets,(gpointer)(num),vaddr);
+        g_string_append_printf(out,"TAINTED SOURCE\t I/O descriptor: %" PRIu64" , source addr: 0x%lx , buf size: %" PRIu64 "\n",
                 a1,a2,a3);
         if(!DEBUG_SYSCALL){
             qemu_plugin_outs(out->str);
@@ -200,6 +205,22 @@ static void syscall_callback(qemu_plugin_id_t id, unsigned int vcpu_index,
     }
 }
 
+
+static void syscall_ret_callback(qemu_plugin_id_t id, unsigned int vcpu_idx, int64_t num, int64_t ret){
+    if(num==0){
+        g_autoptr(GString) out = g_string_new("******system call return *******");
+        g_string_append_printf(out,"\tTainting syscall num: %"PRIu64, num);
+        uint64_t *addr = g_hash_table_lookup(syscall_rets, (gpointer)num);
+        if(addr!=NULL){
+            uint8_t value = 0xff;
+            SHD_write_contiguous(*addr, ret, value);
+            int removed = g_hash_table_remove(syscall_rets, (gpointer)num);
+            g_assert(removed);
+            g_string_append_printf(out,"\t addr=0x%"PRIx64"\tret=%"PRIu64" is done.\n",*addr,ret);
+            qemu_plugin_outs(out->str);
+        }
+    }
+}
 
 static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 {
@@ -421,7 +442,11 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb = taint_cb_MUL_DIV;
                 nice_print(cs_ptr);
                 break;
-            case X86_INS_SYSCALL: //handled in system call cb
+            case X86_INS_SYSCALL: //tainting input is handled in system call cb
+                ALLOC_SET0(cb_args,inst_callback_argument)
+                cb = taint_cb_SYSCALL;
+                nice_print(cs_ptr);
+                break;
             case X86_INS_NOP:
             case X86_INS_NOT:
                 free(cb_args);
@@ -618,5 +643,6 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
     qemu_plugin_register_vcpu_tb_trans_cb(id, vcpu_tb_trans);
     qemu_plugin_register_atexit_cb(id, plugin_exit, NULL);
     qemu_plugin_register_vcpu_syscall_cb(id, syscall_callback);
+    qemu_plugin_register_vcpu_syscall_ret_cb(id, syscall_ret_callback);
     return 0;
 }

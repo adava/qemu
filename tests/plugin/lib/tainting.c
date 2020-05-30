@@ -41,7 +41,7 @@
                              } else{assert(0);}\
 
 #define OUTPUT_ERROR(err, arg, inst_s)  if (err){\
-                                    g_autofree gchar *o2 = g_strdup_printf("SHADOW error in %s inst callback#\toperands: src=%lu, dst=%lu\n",inst_s, arg->src.addr.vaddr, arg->dst.addr.vaddr);\
+                                    g_autofree gchar *o2 = g_strdup_printf("SHADOW error in %s inst callback#\toperands: src=%lx, dst=%lx\n",inst_s, arg->src.addr.vaddr, arg->dst.addr.vaddr);\
                                     qemu_plugin_outs(o2);}
 
 #ifdef DEBUG_MEMCB
@@ -486,6 +486,26 @@ static void taint_cb_LEAVE(unsigned int cpu_index, void *udata){
     err = SHD_copy(arg->src,&arg->src2);
     OUTPUT_ERROR(err,arg,"LEAVE error copying MEM shadow to RBP");
 }
+static void taint_cb_SYSCALL(unsigned int cpu_index, void *udata){
+    shadow_err err = 0;
+    INIT_ARG(arg,udata);
+    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RCX);
+    arg->src.type=GLOBAL;
+    arg->src.size=SHD_SIZE_u64;
+    arg->dst.addr.id=MAP_X86_REGISTER(X86_REG_RSP);
+    arg->dst.type=GLOBAL;
+    arg->dst.size=SHD_SIZE_u64;
+    DEBUG_OUTPUT(arg,"taint_cb_SYSCALL");
+    err = SHD_copy(arg->src,&arg->dst);
+
+    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RDX);
+    arg->dst.addr.id=MAP_X86_REGISTER(X86_REG_RIP);
+    DEBUG_OUTPUT(arg,"taint_cb_SYSCALL");
+    err = SHD_copy(arg->src,&arg->dst);
+
+    OUTPUT_ERROR(err,arg,"SYSCALL");
+}
+
 static void taint_cb_conservative(unsigned int cpu_index, void *udata){
     shadow_err err = 0;
     INIT_ARG(arg,udata);
