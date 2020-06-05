@@ -30,11 +30,17 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
 #define ALLOC_SET0(ptr,type) ptr = malloc(sizeof(type)); \
                              memset(ptr,0,sizeof(type));
+
+#define PLUGIN_OPT
+
+extern int second_ccache_flag;
+
 typedef enum {
     COUNT_CLASS,
     COUNT_INDIVIDUAL,
     COUNT_NONE
 } CountType;
+//static bool plugin_optimize=true;
 
 static bool do_inline;
 static bool verbose;
@@ -191,6 +197,12 @@ static void syscall_callback(qemu_plugin_id_t id, unsigned int vcpu_index,
     if(num==0 && a1==0){ //only standard in; a1==0
 //        uint8_t value = 0xff;
 //        SHD_write_contiguous(a2, a3,value);
+
+        if (second_ccache_flag==CHECK){
+            //switch_mode(TRACK);
+            read_syscall = true;
+        }
+
         uint64_t *vaddr = g_new0(uint64_t,1);
         *vaddr = a2;
         g_hash_table_insert(syscall_rets,(gpointer)(num),vaddr);
@@ -621,6 +633,9 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
         }
 
         }
+    qemu_plugin_register_vcpu_tb_exec_cb(tb, vcpu_tb_exec,
+                                         QEMU_PLUGIN_CB_NO_REGS,
+                                         NULL);
 }
 
 QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,

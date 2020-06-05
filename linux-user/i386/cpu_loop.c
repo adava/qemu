@@ -234,6 +234,11 @@ void cpu_loop(CPUX86State *env)
         case EXCP_ATOMIC:
             cpu_exec_step_atomic(cs);
             break;
+        case 0x27:
+            //second_ccache_flag = 1;
+            printf("SUCCESS in switching!\n");
+            //env->exception_index = -1;
+            break;
         default:
             pc = env->segs[R_CS].base + env->eip;
             EXCP_DUMP(env, "qemu: 0x%08lx: unhandled CPU exception 0x%x - aborting\n",

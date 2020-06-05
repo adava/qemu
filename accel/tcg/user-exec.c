@@ -67,7 +67,6 @@ static inline int handle_cpu_signal(uintptr_t pc, siginfo_t *info,
     CPUClass *cc;
     unsigned long address = (unsigned long)info->si_addr;
     MMUAccessType access_type = is_write ? MMU_DATA_STORE : MMU_DATA_LOAD;
-
     switch (helper_retaddr) {
     default:
         /*

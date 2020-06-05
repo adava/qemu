@@ -42,6 +42,11 @@
 
 typedef uint64_t qemu_plugin_id_t;
 
+typedef enum EXECUTION_MODE{
+    CHECK=0,
+    TRACK
+} EXECUTION_MODE;
+
 /*
  * Versioning plugins:
  *
@@ -281,6 +286,13 @@ void qemu_plugin_register_vcpu_after_insn_exec_cb(struct qemu_plugin_insn *insn,
                                             enum qemu_plugin_cb_flags flags,
                                             void *userdata);
 
+/**
+ * switch_mode() - changes the execution mode to improve performance
+ * if the to is the same as from (implicit argument), the function simply returns
+ * change from check to trace wouldn't return to the caller
+ * @to: the opaque qemu_plugin_insn handle for an instruction
+ */
+void switch_mode(EXECUTION_MODE to);
 
 /**
  * qemu_plugin_register_vcpu_insn_exec_inline() - insn execution inline op

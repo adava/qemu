@@ -10,7 +10,7 @@
 //#define DEBUG_MEMCB
 //#define LOG_INS
 //#define DEBUG_CB
-#define DEBUG_SYSCALL 1
+#define DEBUG_SYSCALL 0
 
 #define READ_VALUE(inq,buf) switch(inq.type){ \
                                 case GLOBAL:\
@@ -58,6 +58,7 @@
 
 #else
 
+bool read_syscall = false;
 static inline void nice_print(cs_insn *insn)
 {
 //    gchar *out;
@@ -535,4 +536,13 @@ static void taint_list_all(void){
     g_string_append_printf(report,"----------------------------------\n");
 
     qemu_plugin_outs(report->str);
+}
+
+static void vcpu_tb_exec(unsigned int cpu_index, void *udata)
+{
+    if (read_syscall){
+        read_syscall = false;
+        switch_mode(TRACK);
+    }
+
 }

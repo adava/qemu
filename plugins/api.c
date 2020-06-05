@@ -56,6 +56,8 @@
 void plugin_mem_rw(CPUState* env, uint64_t addr, void *buf, int len, int is_write);
 #endif
 
+extern int second_ccache_flag;
+
 void qemu_plugin_uninstall(qemu_plugin_id_t id, qemu_plugin_simple_cb_t cb)
 {
     plugin_reset_uninstall(id, cb, false);
@@ -119,6 +121,17 @@ void qemu_plugin_register_vcpu_after_insn_exec_cb(struct qemu_plugin_insn *insn,
                                   cb, flags, udata);
 }
 #endif
+
+void switch_mode(EXECUTION_MODE to){
+    CPUState *env = current_cpu;
+    if (second_ccache_flag!=to && to==TRACK){
+        //EXCP12_TNT=39
+        env->exception_index = 39; //sina: longjmp works neater in comparison to raise_exception because the latter passes the exception to guest.
+        printf("switching\n");
+        siglongjmp(env->jmp_env, 1);
+    }
+}
+
 void qemu_plugin_register_vcpu_insn_exec_inline(struct qemu_plugin_insn *insn,
                                                 enum qemu_plugin_op op,
                                                 void *ptr, uint64_t imm)

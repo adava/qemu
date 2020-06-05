@@ -40,6 +40,8 @@
 
 /* -icount align implementation. */
 
+int second_ccache_flag = 0;
+
 typedef struct SyncClocks {
     int64_t diff_clk;
     int64_t last_cpu_icount;
