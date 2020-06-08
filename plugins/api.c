@@ -124,12 +124,11 @@ void qemu_plugin_register_vcpu_after_insn_exec_cb(struct qemu_plugin_insn *insn,
 
 void switch_mode(EXECUTION_MODE to){
     CPUState *env = current_cpu;
-    if (second_ccache_flag!=to && to==TRACK){
+        set_helper_retaddr(GETPC());
         //EXCP12_TNT=39
         env->exception_index = 39; //sina: longjmp works neater in comparison to raise_exception because the latter passes the exception to guest.
-        printf("switching\n");
+        printf("switching to mode=%d\n",to);
         siglongjmp(env->jmp_env, 1);
-    }
 }
 
 void qemu_plugin_register_vcpu_insn_exec_inline(struct qemu_plugin_insn *insn,

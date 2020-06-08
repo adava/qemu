@@ -33,8 +33,6 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
 #define PLUGIN_OPT
 
-extern int second_ccache_flag;
-
 typedef enum {
     COUNT_CLASS,
     COUNT_INDIVIDUAL,
@@ -133,6 +131,13 @@ static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
     if (udata!=NULL){
         arg = (mem_callback_argument *)udata;
         *(arg->addr) = vaddr;
+        shad_inq inq = {.addr.vaddr=vaddr,.type=MEMORY,.size=SHD_SIZE_u64};
+        SHD_value shd=SHD_get_shadow(inq);
+        if(shd && second_ccache_flag==CHECK){
+            printf("switching in op_mem\n");
+            second_ccache_flag = TRACK;
+            switch_mode(TRACK);
+        }
         if (arg->args!=NULL && arg->callback!=NULL){
             arg->callback(cpu_index, (void *)arg->args);
         }
@@ -181,6 +186,7 @@ static void plugin_init(void)
     syscall_rets =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     init_register_mapping();
     SHD_init();
+    second_ccache_flag = CHECK;
     g_string_append_printf(report,"Done!\n");
     qemu_plugin_outs(report->str);
 
@@ -197,11 +203,6 @@ static void syscall_callback(qemu_plugin_id_t id, unsigned int vcpu_index,
     if(num==0 && a1==0){ //only standard in; a1==0
 //        uint8_t value = 0xff;
 //        SHD_write_contiguous(a2, a3,value);
-
-        if (second_ccache_flag==CHECK){
-            //switch_mode(TRACK);
-            read_syscall = true;
-        }
 
         uint64_t *vaddr = g_new0(uint64_t,1);
         *vaddr = a2;
@@ -238,7 +239,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 {
     size_t n = qemu_plugin_tb_n_insns(tb);
     size_t i;
-
+    tb_num++;
     for (i = 0; i < n; i++) {
         struct qemu_plugin_insn *insn = qemu_plugin_tb_get_insn(tb, i);
 
@@ -635,7 +636,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
         }
     qemu_plugin_register_vcpu_tb_exec_cb(tb, vcpu_tb_exec,
                                          QEMU_PLUGIN_CB_NO_REGS,
-                                         NULL);
+                                         (void *)&tb_num);
 }
 
 QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,

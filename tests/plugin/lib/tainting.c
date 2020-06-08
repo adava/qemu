@@ -12,6 +12,8 @@
 //#define DEBUG_CB
 #define DEBUG_SYSCALL 0
 
+int tb_num=0;
+int tb_switched = -1;
 #define READ_VALUE(inq,buf) switch(inq.type){ \
                                 case GLOBAL:\
                                     plugin_reg_read(inq.addr.id,inq.size,buf);\
@@ -58,7 +60,8 @@
 
 #else
 
-bool read_syscall = false;
+extern int second_ccache_flag;
+extern int registers_clean;
 static inline void nice_print(cs_insn *insn)
 {
 //    gchar *out;
@@ -540,9 +543,16 @@ static void taint_list_all(void){
 
 static void vcpu_tb_exec(unsigned int cpu_index, void *udata)
 {
-    if (read_syscall){
-        read_syscall = false;
-        switch_mode(TRACK);
+    //printf("flag=%d",second_ccache_flag);
+    shadow_err err;
+    if(second_ccache_flag==TRACK){
+        err = check_registers(R_EAX,R_EIP);
+        if (err==0 && second_ccache_flag==TRACK){
+            registers_clean = 1;
+            printf("registers clean for tb=%d\n",*(int *)udata);
+        }
     }
-
+    else{
+        registers_clean = 0;
+    }
 }

@@ -4,17 +4,17 @@
 #define MAX_NUM_FLAGS 64
 #define TARGET_PAGE_BITS 12
 
-#if !defined(_BITS_STDINT_INTN_H) && !defined(SHADOW_BASIC_INT_TYPES)
-#define SHADOW_BASIC_INT_TYPES
-typedef signed char  int8_t;
-typedef signed short int16_t;
-typedef signed int   int32_t;
-typedef unsigned char  uint8_t;
-typedef unsigned short uint16_t;
-typedef unsigned int   uint32_t;
-typedef signed long long   int64_t;
-typedef unsigned long long uint64_t;
-#endif
+//#if !defined(_BITS_STDINT_INTN_H) && !defined(SHADOW_BASIC_INT_TYPES)
+//#define SHADOW_BASIC_INT_TYPES
+//typedef signed char  int8_t;
+//typedef signed short int16_t;
+//typedef signed int   int32_t;
+//typedef unsigned char  uint8_t;
+//typedef unsigned short uint16_t;
+//typedef unsigned int   uint32_t;
+//typedef signed long long   int64_t;
+//typedef unsigned long long uint64_t;
+//#endif
 #define DEREF_TYPE(buf,type) (*(type*)buf)
 
 #define SIZE_SET(buf,size,res)  switch(size){\
@@ -117,6 +117,9 @@ SHD_value SHD_get_shadow(shad_inq inq);
 shadow_err SHD_set_shadow(shad_inq *inq, void *value); //id for temps would be set by the callee
 
 shadow_err write_memory_shadow(uint64_t vaddr, uint32_t size, uint8_t value);
+
+shadow_err check_registers(uint64_t start, uint64_t end);
+
 int SHD_list_mem(GFunc print_mem_shadows); //The first parameter given to the print_mem_shadows is the memory address, and the second is its non-zero shadow value. The first parameter is live until return.
 int SHD_list_global(GFunc print_func);
 int SHD_list_temp(GFunc print_func);

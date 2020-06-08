@@ -264,3 +264,13 @@ int SHD_list_temp(GFunc print_func){
     }
     return len;
 }
+
+shadow_err check_registers(uint64_t start, uint64_t end){
+    for(uint64_t i=start;i<=end;i++){
+        SHD_value *shadow = g_ptr_array_index(SHD_Memory.global_temps, i);
+        if (*shadow!=0){
+            return 2;
+        }
+    }
+    return 0;
+}
