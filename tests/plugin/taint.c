@@ -128,24 +128,26 @@ static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
                      uint64_t vaddr, void *udata)
 {
     mem_callback_argument *arg;
+//    printf("I'm in op_mem\n");
     if (udata!=NULL){
         arg = (mem_callback_argument *)udata;
         *(arg->addr) = vaddr;
         shad_inq inq = {.addr.vaddr=vaddr,.type=MEMORY,.size=SHD_SIZE_u64};
         SHD_value shd=SHD_get_shadow(inq);
+        if (arg->args!=NULL && arg->callback!=NULL){
+            arg->callback(cpu_index, (void *)arg->args);
+        }
         if(shd && second_ccache_flag==CHECK){
             printf("switching in op_mem\n");
             second_ccache_flag = TRACK;
-            switch_mode(TRACK);
-        }
-        if (arg->args!=NULL && arg->callback!=NULL){
-            arg->callback(cpu_index, (void *)arg->args);
+            switch_mode(TRACK, true, 1);
         }
 //        free(udata);
     }
     else{
         assert(0);
     }
+//    printf("Leaving op_mem\n");
     DEBUG_MEMCB_OUTPUT(arg->addr);
 }
 
@@ -231,6 +233,7 @@ static void syscall_ret_callback(qemu_plugin_id_t id, unsigned int vcpu_idx, int
             g_assert(removed);
             g_string_append_printf(out,"\t addr=0x%"PRIx64"\tret=%"PRIu64" is done.\n",*addr,ret);
             qemu_plugin_outs(out->str);
+            switch_mode(TRACK,false, 0);
         }
     }
 }
@@ -632,11 +635,21 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                     assert(0);
             }
         }
+//        if (i==n-1){
+//            tb_ip *tbIp;
+//            ALLOC_SET0(tbIp,tb_ip);
+//            tbIp->ip=qemu_plugin_insn_vaddr(insn);
+//            tbIp->tb = tb_num;
+//            qemu_plugin_register_vcpu_insn_exec_cb(insn, vcpu_tb_exec,
+//                                                         QEMU_PLUGIN_CB_NO_REGS,
+//                                                         (void *)tbIp);
+//        }
+    }
+    tb_ip *tbIp;
+    ALLOC_SET0(tbIp,tb_ip);
+    tbIp->ip=0;
+    qemu_plugin_register_vcpu_tb_exec_cb(tb, vcpu_tb_exec, QEMU_PLUGIN_CB_NO_REGS, (void *)tbIp);
 
-        }
-    qemu_plugin_register_vcpu_tb_exec_cb(tb, vcpu_tb_exec,
-                                         QEMU_PLUGIN_CB_NO_REGS,
-                                         (void *)&tb_num);
 }
 
 QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,

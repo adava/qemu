@@ -94,7 +94,7 @@ void cpu_loop(CPUX86State *env)
         trapnr = cpu_exec(cs);
         cpu_exec_end(cs);
         process_queued_cpu_work(cs);
-
+        printf("Exception:%d\n",trapnr);
         switch(trapnr) {
         case 0x80:
             /* linux syscall from int $0x80 */
@@ -156,6 +156,7 @@ void cpu_loop(CPUX86State *env)
             }
             break;
         case EXCP0E_PAGE:
+            printf("Page Fault Exception:EXCP0E_PAGE\n");
             info.si_signo = TARGET_SIGSEGV;
             info.si_errno = 0;
             if (!(env->error_code & 1))
@@ -247,6 +248,7 @@ void cpu_loop(CPUX86State *env)
         }
         process_pending_signals(env);
     }
+
 }
 
 void target_cpu_copy_regs(CPUArchState *env, struct target_pt_regs *regs)

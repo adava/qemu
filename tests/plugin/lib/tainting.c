@@ -11,7 +11,10 @@
 //#define LOG_INS
 //#define DEBUG_CB
 #define DEBUG_SYSCALL 0
-
+typedef struct{
+    uint64_t ip;
+    int tb;
+} tb_ip;
 int tb_num=0;
 int tb_switched = -1;
 #define READ_VALUE(inq,buf) switch(inq.type){ \
@@ -403,7 +406,7 @@ static void taint_cb_JUMP(unsigned int cpu_index, void *udata) {
 static void taint_cb_CALL(unsigned int cpu_index, void *udata) {
     shadow_err err = 0;
     INIT_ARG(arg,udata);
-
+//    printf("taint_cb_CALL\n");
     DEBUG_OUTPUT(arg,"taint_cb_CALL");
     READ_VALUE(arg->dst, &arg->dst.addr.vaddr); //we need the value of stack register, we use the value as a memory address to store the eip taint
     arg->dst.type = MEMORY;
@@ -415,6 +418,7 @@ static void taint_cb_CALL(unsigned int cpu_index, void *udata) {
     SHD_value jmp_addr = SHD_get_shadow(arg->src);
     jmp_addr!=0?(err=1):(err=0);
     OUTPUT_ERROR(err,arg,"CALL *** destination function address is tainted ***");
+//    printf("leaving taint_cb_CALL\n");
 }
 
 static void taint_cb_RET(unsigned int cpu_index, void *udata) { //reverse of CALL, RET target is one put in the dst read from stack
@@ -504,7 +508,6 @@ static void taint_cb_SYSCALL(unsigned int cpu_index, void *udata){
 
     arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RDX);
     arg->dst.addr.id=MAP_X86_REGISTER(X86_REG_RIP);
-    DEBUG_OUTPUT(arg,"taint_cb_SYSCALL");
     err = SHD_copy(arg->src,&arg->dst);
 
     OUTPUT_ERROR(err,arg,"SYSCALL");
@@ -543,16 +546,19 @@ static void taint_list_all(void){
 
 static void vcpu_tb_exec(unsigned int cpu_index, void *udata)
 {
-    //printf("flag=%d",second_ccache_flag);
+//    printf("in the vcpu_tb_exec flag=%d, tb=%d\n",second_ccache_flag,*(int *)udata);
+    tb_ip *tbIp = (tb_ip *)udata;
     shadow_err err;
     if(second_ccache_flag==TRACK){
         err = check_registers(R_EAX,R_EIP);
-        if (err==0 && second_ccache_flag==TRACK){
+        if (err==0){
             registers_clean = 1;
-            printf("registers clean for tb=%d\n",*(int *)udata);
+            printf("registers clean for tb=%d, ip=%lx\n",tbIp->tb,tbIp->ip);
+            switch_mode(CHECK,true,0);
         }
     }
     else{
         registers_clean = 0;
     }
+//    printf("xleaving vcpu_tb_exec\n");
 }

@@ -292,7 +292,7 @@ void qemu_plugin_register_vcpu_after_insn_exec_cb(struct qemu_plugin_insn *insn,
  * change from check to trace wouldn't return to the caller
  * @to: the opaque qemu_plugin_insn handle for an instruction
  */
-void switch_mode(EXECUTION_MODE to);
+void switch_mode(EXECUTION_MODE to,bool immediateJMP, uint64_t eip);
 
 /**
  * qemu_plugin_register_vcpu_insn_exec_inline() - insn execution inline op

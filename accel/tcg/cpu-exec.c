@@ -713,9 +713,9 @@ int cpu_exec(CPUState *cpu)
 
     if (registers_clean && second_ccache_flag==TRACK){
         second_ccache_flag = CHECK;
+        registers_clean = 0;
         printf("switched to %d in cpu_exec\n",second_ccache_flag);
     }
-
     /* if an exception is pending, we execute it here */
     while (!cpu_handle_exception(cpu, &ret)) {
         TranslationBlock *last_tb = NULL;

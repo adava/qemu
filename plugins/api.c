@@ -122,13 +122,25 @@ void qemu_plugin_register_vcpu_after_insn_exec_cb(struct qemu_plugin_insn *insn,
 }
 #endif
 
-void switch_mode(EXECUTION_MODE to){
-    CPUState *env = current_cpu;
-        set_helper_retaddr(GETPC());
-        //EXCP12_TNT=39
-        env->exception_index = 39; //sina: longjmp works neater in comparison to raise_exception because the latter passes the exception to guest.
-        printf("switching to mode=%d\n",to);
-        siglongjmp(env->jmp_env, 1);
+void switch_mode(EXECUTION_MODE to, bool immediateJMP, uint64_t eip){
+    //    CPUState *env = current_cpu;
+#ifdef TARGET_X86_64
+    CPUX86State *env = &(X86_CPU(current_cpu)->env);
+
+    if (immediateJMP && eip!=0){
+        uintptr_t pc = GETPC();
+        set_helper_retaddr(pc);
+        cpu_restore_state(current_cpu,eip,true);
+    }
+    //EXCP12_TNT=39
+//    env->exception_index = 0x10027
+    printf("TB PC=%lx\n",env->eip);
+    current_cpu->exception_index = 39; //sina: longjmp works neater in comparison to raise_exception because the latter passes the exception to guest.
+    printf("switching to mode=%d\n",to);
+    if(immediateJMP){
+        siglongjmp(current_cpu->jmp_env, 1);
+    }
+#endif
 }
 
 void qemu_plugin_register_vcpu_insn_exec_inline(struct qemu_plugin_insn *insn,

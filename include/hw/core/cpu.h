@@ -389,6 +389,10 @@ struct CPUState {
     /* Accessed in parallel; all accesses must be atomic */
     struct TranslationBlock *tb_jmp_cache[TB_JMP_CACHE_SIZE];
 
+#ifdef CONFIG_2nd_CCACHE
+    struct TranslationBlock *tb_jmp_2cache[TB_JMP_CACHE_SIZE];
+#endif
+
     struct GDBRegisterState *gdb_regs;
     int gdb_num_regs;
     int gdb_num_g_regs;
