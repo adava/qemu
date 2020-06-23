@@ -64,6 +64,7 @@ int tb_switched = -1;
 #else
 
 extern int second_ccache_flag;
+extern uint64_t last_switched_eip;
 extern int registers_clean;
 static inline void nice_print(cs_insn *insn)
 {
@@ -554,7 +555,7 @@ static void vcpu_tb_exec(unsigned int cpu_index, void *udata)
         if (err==0){
             registers_clean = 1;
             printf("registers clean for tb=%d, ip=%lx\n",tbIp->tb,tbIp->ip);
-            switch_mode(CHECK,true,0);
+            switch_mode(CHECK,true,tbIp->ip);
         }
     }
     else{

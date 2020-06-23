@@ -57,6 +57,7 @@ void plugin_mem_rw(CPUState* env, uint64_t addr, void *buf, int len, int is_writ
 #endif
 
 extern int second_ccache_flag;
+extern uint64_t last_switched_eip;
 
 void qemu_plugin_uninstall(qemu_plugin_id_t id, qemu_plugin_simple_cb_t cb)
 {
@@ -124,21 +125,31 @@ void qemu_plugin_register_vcpu_after_insn_exec_cb(struct qemu_plugin_insn *insn,
 
 void switch_mode(EXECUTION_MODE to, bool immediateJMP, uint64_t eip){
     //    CPUState *env = current_cpu;
+    if (eip!=0 && last_switched_eip==eip){
+        return;
+    }
+    else{
+        last_switched_eip = eip;
+        second_ccache_flag = to;
+    }
 #ifdef TARGET_X86_64
+    uintptr_t pc = GETPC();
     CPUX86State *env = &(X86_CPU(current_cpu)->env);
+    printf("GETPC=%lx, env->eip=0x%lx, guest_eip=0x%lx, last_switched_eip=0x%lx\n",pc,env->eip,eip,last_switched_eip);
+    if (eip!=0){
 
-    if (immediateJMP && eip!=0){
-        uintptr_t pc = GETPC();
-        set_helper_retaddr(pc);
-        cpu_restore_state(current_cpu,eip,true);
+//        set_helper_retaddr(pc);
+//        cpu_restore_state(current_cpu,eip,true);
+    env->eip = eip;
     }
     //EXCP12_TNT=39
 //    env->exception_index = 0x10027
-    printf("TB PC=%lx\n",env->eip);
+
     current_cpu->exception_index = 39; //sina: longjmp works neater in comparison to raise_exception because the latter passes the exception to guest.
     printf("switching to mode=%d\n",to);
     if(immediateJMP){
-        siglongjmp(current_cpu->jmp_env, 1);
+        cpu_loop_exit(current_cpu);
+//        siglongjmp(current_cpu->jmp_env, 1);
     }
 #endif
 }

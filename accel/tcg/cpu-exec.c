@@ -41,6 +41,7 @@
 /* -icount align implementation. */
 
 int second_ccache_flag = 0;
+uint64_t last_switched_eip = 0;
 int registers_clean = 0;
 
 typedef struct SyncClocks {

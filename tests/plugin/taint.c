@@ -139,8 +139,8 @@ static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
         }
         if(shd && second_ccache_flag==CHECK){
             printf("switching in op_mem\n");
-            second_ccache_flag = TRACK;
-            switch_mode(TRACK, true, 1);
+//            second_ccache_flag = TRACK;
+            switch_mode(TRACK, true, arg->ip);
         }
 //        free(udata);
     }
@@ -241,11 +241,16 @@ static void syscall_ret_callback(qemu_plugin_id_t id, unsigned int vcpu_idx, int
 static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 {
     size_t n = qemu_plugin_tb_n_insns(tb);
+    tb_ip *tbIp;
+    ALLOC_SET0(tbIp,tb_ip);
+
     size_t i;
     tb_num++;
     for (i = 0; i < n; i++) {
         struct qemu_plugin_insn *insn = qemu_plugin_tb_get_insn(tb, i);
-
+        if (i==0){
+            tbIp->ip=qemu_plugin_insn_vaddr(insn);
+        }
         mem_callback_argument *mem_cb_arg = NULL;
         void *usr_data=NULL;
         CB_TYPE cbType=AFTER;
@@ -604,11 +609,14 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             if (cb_args->src.type == MEMORY){
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->src.addr.vaddr);
+                mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);
             }
             else if (cb_args->dst.type == MEMORY){
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->dst.addr.vaddr);
+                mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);
             }
+
         }
         if (mem_cb_arg!=NULL){
             qemu_plugin_register_vcpu_mem_cb(insn, op_mem,
@@ -645,9 +653,6 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 //                                                         (void *)tbIp);
 //        }
     }
-    tb_ip *tbIp;
-    ALLOC_SET0(tbIp,tb_ip);
-    tbIp->ip=0;
     qemu_plugin_register_vcpu_tb_exec_cb(tb, vcpu_tb_exec, QEMU_PLUGIN_CB_NO_REGS, (void *)tbIp);
 
 }

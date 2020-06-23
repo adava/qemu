@@ -26,6 +26,7 @@ typedef struct{
 typedef struct{
     char *operand;
     uint64_t *addr;
+    uint64_t ip;
     inst_callback_argument *args;
     qemu_plugin_vcpu_udata_cb_t callback;
 } mem_callback_argument;

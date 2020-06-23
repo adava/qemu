@@ -94,7 +94,7 @@ void cpu_loop(CPUX86State *env)
         trapnr = cpu_exec(cs);
         cpu_exec_end(cs);
         process_queued_cpu_work(cs);
-        printf("Exception:%d\n",trapnr);
+//        printf("Exception:%d\n",trapnr);
         switch(trapnr) {
         case 0x80:
             /* linux syscall from int $0x80 */
