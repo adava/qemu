@@ -156,7 +156,6 @@ void cpu_loop(CPUX86State *env)
             }
             break;
         case EXCP0E_PAGE:
-            printf("Page Fault Exception:EXCP0E_PAGE\n");
             info.si_signo = TARGET_SIGSEGV;
             info.si_errno = 0;
             if (!(env->error_code & 1))
@@ -235,11 +234,15 @@ void cpu_loop(CPUX86State *env)
         case EXCP_ATOMIC:
             cpu_exec_step_atomic(cs);
             break;
+#ifdef CONFIG_2nd_CCACHE
         case 0x27:
             //second_ccache_flag = 1;
+#ifdef CONFIG_DEBUG_CCACHE_SWITCH
             printf("SUCCESS in switching!\n");
+#endif
             //env->exception_index = -1;
             break;
+#endif
         default:
             pc = env->segs[R_CS].base + env->eip;
             EXCP_DUMP(env, "qemu: 0x%08lx: unhandled CPU exception 0x%x - aborting\n",

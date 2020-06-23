@@ -11,6 +11,7 @@
 //#define LOG_INS
 //#define DEBUG_CB
 #define DEBUG_SYSCALL 0
+
 typedef struct{
     uint64_t ip;
     int tb;
@@ -63,9 +64,7 @@ int tb_switched = -1;
 
 #else
 
-extern int second_ccache_flag;
-extern uint64_t last_switched_eip;
-extern int registers_clean;
+
 static inline void nice_print(cs_insn *insn)
 {
 //    gchar *out;
@@ -547,19 +546,15 @@ static void taint_list_all(void){
 
 static void vcpu_tb_exec(unsigned int cpu_index, void *udata)
 {
-//    printf("in the vcpu_tb_exec flag=%d, tb=%d\n",second_ccache_flag,*(int *)udata);
     tb_ip *tbIp = (tb_ip *)udata;
     shadow_err err;
     if(second_ccache_flag==TRACK){
         err = check_registers(R_EAX,R_EIP);
         if (err==0){
-            registers_clean = 1;
+#ifdef CONFIG_DEBUG_CCACHE_SWITCH
             printf("registers clean for tb=%d, ip=%lx\n",tbIp->tb,tbIp->ip);
+#endif
             switch_mode(CHECK,true,tbIp->ip);
         }
     }
-    else{
-        registers_clean = 0;
-    }
-//    printf("xleaving vcpu_tb_exec\n");
 }

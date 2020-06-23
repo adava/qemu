@@ -42,7 +42,6 @@
 
 int second_ccache_flag = 0;
 uint64_t last_switched_eip = 0;
-int registers_clean = 0;
 
 typedef struct SyncClocks {
     int64_t diff_clk;
@@ -712,11 +711,6 @@ int cpu_exec(CPUState *cpu)
         assert_no_pages_locked();
     }
 
-    if (registers_clean && second_ccache_flag==TRACK){
-        second_ccache_flag = CHECK;
-        registers_clean = 0;
-        printf("switched to %d in cpu_exec\n",second_ccache_flag);
-    }
     /* if an exception is pending, we execute it here */
     while (!cpu_handle_exception(cpu, &ret)) {
         TranslationBlock *last_tb = NULL;

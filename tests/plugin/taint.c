@@ -128,7 +128,6 @@ static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
                      uint64_t vaddr, void *udata)
 {
     mem_callback_argument *arg;
-//    printf("I'm in op_mem\n");
     if (udata!=NULL){
         arg = (mem_callback_argument *)udata;
         *(arg->addr) = vaddr;
@@ -138,16 +137,15 @@ static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
             arg->callback(cpu_index, (void *)arg->args);
         }
         if(shd && second_ccache_flag==CHECK){
+#ifdef CONFIG_DEBUG_CCACHE_SWITCH
             printf("switching in op_mem\n");
-//            second_ccache_flag = TRACK;
+#endif
             switch_mode(TRACK, true, arg->ip);
         }
-//        free(udata);
     }
     else{
         assert(0);
     }
-//    printf("Leaving op_mem\n");
     DEBUG_MEMCB_OUTPUT(arg->addr);
 }
 
@@ -184,6 +182,12 @@ static void plugin_exit(qemu_plugin_id_t id, void *p)
 static void plugin_init(void)
 {
     g_autoptr(GString) report = g_string_new("Initialization:\n");
+#ifdef CONFIG_2nd_CCACHE
+    printf("2nd code cache optimization is activated!\n");
+#endif
+#ifndef CONFIG_DEBUG_CCACHE_SWITCH
+    printf("debugging information for 2nd code cache optimization would not be printed!\n");
+#endif
     unsupported_ins_log =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     syscall_rets =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     init_register_mapping();
