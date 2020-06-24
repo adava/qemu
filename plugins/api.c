@@ -118,6 +118,7 @@ void qemu_plugin_register_vcpu_after_insn_exec_cb(struct qemu_plugin_insn *insn,
 }
 #endif
 
+#ifdef CONFIG_2nd_CCACHE
 void switch_mode(EXECUTION_MODE to, bool immediateJMP, uint64_t eip){
     if (eip!=0 && last_switched_eip==eip && to==CHECK){
         return;
@@ -146,6 +147,7 @@ void switch_mode(EXECUTION_MODE to, bool immediateJMP, uint64_t eip){
         cpu_loop_exit(current_cpu); // does the siglongjmp within
     }
 }
+#endif
 
 void qemu_plugin_register_vcpu_insn_exec_inline(struct qemu_plugin_insn *insn,
                                                 enum qemu_plugin_op op,

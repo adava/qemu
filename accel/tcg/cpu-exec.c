@@ -343,7 +343,17 @@ TranslationBlock *tb_htable_lookup(CPUState *cpu, target_ulong pc,
     }
     desc.phys_page1 = phys_pc & TARGET_PAGE_MASK;
     h = tb_hash_func(phys_pc, pc, flags, cf_mask, *cpu->trace_dstate);
+
+#ifdef CONFIG_2nd_CCACHE
+    if (second_ccache_flag){
+        return qht_lookup_custom(&tb_ctx.htable_2nd, &desc, h, tb_lookup_cmp);
+    }
+    else{
+        return qht_lookup_custom(&tb_ctx.htable, &desc, h, tb_lookup_cmp);
+    }
+#else
     return qht_lookup_custom(&tb_ctx.htable, &desc, h, tb_lookup_cmp);
+#endif
 }
 
 void tb_set_jmp_target(TranslationBlock *tb, int n, uintptr_t addr)
@@ -410,7 +420,16 @@ static inline TranslationBlock *tb_find(CPUState *cpu,
         tb = tb_gen_code(cpu, pc, cs_base, flags, cf_mask);
         mmap_unlock();
         /* We add the TB in the virtual pc hash table for the fast lookup */
+#ifdef CONFIG_2nd_CCACHE
+    if (second_ccache_flag){
+        atomic_set(&cpu->tb_jmp_2cache[tb_jmp_cache_hash_func(pc)], tb);
+    }
+    else{
         atomic_set(&cpu->tb_jmp_cache[tb_jmp_cache_hash_func(pc)], tb);
+    }
+#else
+        atomic_set(&cpu->tb_jmp_cache[tb_jmp_cache_hash_func(pc)], tb);
+#endif
     }
 #ifndef CONFIG_USER_ONLY
     /* We don't take care of direct jumps when address mapping changes in

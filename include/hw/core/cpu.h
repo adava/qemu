@@ -466,6 +466,11 @@ static inline void cpu_tb_jmp_cache_clear(CPUState *cpu)
     for (i = 0; i < TB_JMP_CACHE_SIZE; i++) {
         atomic_set(&cpu->tb_jmp_cache[i], NULL);
     }
+#ifdef CONFIG_2nd_CCACHE
+    for (i = 0; i < TB_JMP_CACHE_SIZE; i++) {
+        atomic_set(&cpu->tb_jmp_2cache[i], NULL);
+    }
+#endif
 }
 
 /**

@@ -543,7 +543,7 @@ static void taint_list_all(void){
 
     qemu_plugin_outs(report->str);
 }
-
+#ifdef CONFIG_2nd_CCACHE
 static void vcpu_tb_exec(unsigned int cpu_index, void *udata)
 {
     tb_ip *tbIp = (tb_ip *)udata;
@@ -558,3 +558,4 @@ static void vcpu_tb_exec(unsigned int cpu_index, void *udata)
         }
     }
 }
+#endif

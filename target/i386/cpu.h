@@ -26,10 +26,6 @@
 #include "exec/cpu-defs.h"
 #include "qapi/qapi-types-common.h"
 
-#define CONFIG_2nd_CCACHE
-#define CONFIG_TAINT_ANALYSIS
-//#define CONFIG_DEBUG_CCACHE_SWITCH
-
 /* The x86 has a strong memory model with some store-after-load re-ordering */
 #define TCG_GUEST_DEFAULT_MO      (TCG_MO_ALL & ~TCG_MO_ST_LD)
 

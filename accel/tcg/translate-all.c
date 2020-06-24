@@ -1148,6 +1148,9 @@ static void tb_htable_init(void)
     unsigned int mode = QHT_MODE_AUTO_RESIZE;
 
     qht_init(&tb_ctx.htable, tb_cmp, CODE_GEN_HTABLE_SIZE, mode);
+#ifdef CONFIG_2nd_CCACHE
+    qht_init(&tb_ctx.htable_2nd, tb_cmp, CODE_GEN_HTABLE_SIZE, mode);
+#endif
 }
 
 /* Must be called before using the QEMU cpus. 'tb_size' is the size
@@ -1250,6 +1253,9 @@ static void do_tb_flush(CPUState *cpu, run_on_cpu_data tb_flush_count)
     }
 
     qht_reset_size(&tb_ctx.htable, CODE_GEN_HTABLE_SIZE);
+#ifdef CONFIG_2nd_CCACHE
+    qht_reset_size(&tb_ctx.htable_2nd, CODE_GEN_HTABLE_SIZE);
+#endif
     page_flush_tb();
 
     tcg_region_reset_all();
@@ -1305,6 +1311,9 @@ static void tb_invalidate_check(target_ulong address)
 {
     address &= TARGET_PAGE_MASK;
     qht_iter(&tb_ctx.htable, do_tb_invalidate_check, &address);
+#ifdef CONFIG_2nd_CCACHE
+    qht_iter(&tb_ctx.htable_2nd, do_tb_invalidate_check, &address);
+#endif
 }
 
 static void do_tb_page_check(void *p, uint32_t hash, void *userp)
@@ -1324,6 +1333,9 @@ static void do_tb_page_check(void *p, uint32_t hash, void *userp)
 static void tb_page_check(void)
 {
     qht_iter(&tb_ctx.htable, do_tb_page_check, NULL);
+#ifdef CONFIG_2nd_CCACHE
+    qht_iter(&tb_ctx.htable_2nd, do_tb_page_check, NULL);
+#endif
 }
 
 #endif /* CONFIG_USER_ONLY */
@@ -1448,10 +1460,17 @@ static void do_tb_phys_invalidate(TranslationBlock *tb, bool rm_from_page_list)
     phys_pc = tb->page_addr[0] + (tb->pc & ~TARGET_PAGE_MASK);
     h = tb_hash_func(phys_pc, tb->pc, tb->flags, tb_cflags(tb) & CF_HASH_MASK,
                      tb->trace_vcpu_dstate);
+#ifdef CONFIG_2nd_CCACHE
+    if (!(tb->cflags & CF_NOCACHE) &&
+        !qht_remove(&tb_ctx.htable, tb, h) && !qht_remove(&tb_ctx.htable_2nd, tb, h)) {
+        return;
+    }
+#else
     if (!(tb->cflags & CF_NOCACHE) &&
         !qht_remove(&tb_ctx.htable, tb, h)) {
         return;
     }
+#endif
 
     /* remove the TB from the page list */
     if (rm_from_page_list) {
@@ -1468,9 +1487,18 @@ static void do_tb_phys_invalidate(TranslationBlock *tb, bool rm_from_page_list)
     /* remove the TB from the hash list */
     h = tb_jmp_cache_hash_func(tb->pc);
     CPU_FOREACH(cpu) {
+#ifdef CONFIG_2nd_CCACHE
         if (atomic_read(&cpu->tb_jmp_cache[h]) == tb) {
             atomic_set(&cpu->tb_jmp_cache[h], NULL);
         }
+        if (atomic_read(&cpu->tb_jmp_2cache[h]) == tb) {
+            atomic_set(&cpu->tb_jmp_2cache[h], NULL);
+        }
+#else
+        if (atomic_read(&cpu->tb_jmp_cache[h]) == tb) {
+            atomic_set(&cpu->tb_jmp_cache[h], NULL);
+        }
+#endif
     }
 
     /* suppress this TB from the two jump lists */
@@ -1644,7 +1672,16 @@ tb_link_page(TranslationBlock *tb, tb_page_addr_t phys_pc,
         /* add in the hash table */
         h = tb_hash_func(phys_pc, tb->pc, tb->flags, tb->cflags & CF_HASH_MASK,
                          tb->trace_vcpu_dstate);
+#ifdef CONFIG_2nd_CCACHE
+    if (second_ccache_flag){
+        qht_insert(&tb_ctx.htable_2nd, tb, h, &existing_tb);
+    }
+    else{
         qht_insert(&tb_ctx.htable, tb, h, &existing_tb);
+    }
+#else
+        qht_insert(&tb_ctx.htable, tb, h, &existing_tb);
+#endif
 
         /* remove TB from the page(s) if we couldn't insert it */
         if (unlikely(existing_tb)) {
@@ -2245,9 +2282,16 @@ static void tb_jmp_cache_clear_page(CPUState *cpu, target_ulong page_addr)
 {
     unsigned int i, i0 = tb_jmp_cache_hash_page(page_addr);
 
+
     for (i = 0; i < TB_JMP_PAGE_SIZE; i++) {
         atomic_set(&cpu->tb_jmp_cache[i0 + i], NULL);
     }
+#ifdef CONFIG_2nd_CCACHE
+    for (i = 0; i < TB_JMP_PAGE_SIZE; i++) {
+        atomic_set(&cpu->tb_jmp_2cache[i0 + i], NULL);
+    }
+#endif
+
 }
 
 void tb_flush_jmp_cache(CPUState *cpu, target_ulong addr)
@@ -2361,6 +2405,9 @@ void dump_exec_info(void)
                 nb_tbs ? (tst.direct_jmp2_count * 100) / nb_tbs : 0);
 
     qht_statistics_init(&tb_ctx.htable, &hst);
+#ifdef CONFIG_2nd_CCACHE
+    qht_statistics_init(&tb_ctx.htable_2nd, &hst);
+#endif
     print_qht_statistics(hst);
     qht_statistics_destroy(&hst);
 

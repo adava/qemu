@@ -131,16 +131,18 @@ static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
     if (udata!=NULL){
         arg = (mem_callback_argument *)udata;
         *(arg->addr) = vaddr;
+#ifdef CONFIG_2nd_CCACHE
         shad_inq inq = {.addr.vaddr=vaddr,.type=MEMORY,.size=SHD_SIZE_u64};
         SHD_value shd=SHD_get_shadow(inq);
-        if (arg->args!=NULL && arg->callback!=NULL){
-            arg->callback(cpu_index, (void *)arg->args);
-        }
         if(shd && second_ccache_flag==CHECK){
 #ifdef CONFIG_DEBUG_CCACHE_SWITCH
             printf("switching in op_mem\n");
 #endif
             switch_mode(TRACK, true, arg->ip);
+        }
+#endif
+        if (arg->args!=NULL && arg->callback!=NULL){
+            arg->callback(cpu_index, (void *)arg->args);
         }
     }
     else{
@@ -192,7 +194,9 @@ static void plugin_init(void)
     syscall_rets =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     init_register_mapping();
     SHD_init();
+#ifdef CONFIG_2nd_CCACHE
     second_ccache_flag = CHECK;
+#endif
     g_string_append_printf(report,"Done!\n");
     qemu_plugin_outs(report->str);
 
@@ -237,7 +241,11 @@ static void syscall_ret_callback(qemu_plugin_id_t id, unsigned int vcpu_idx, int
             g_assert(removed);
             g_string_append_printf(out,"\t addr=0x%"PRIx64"\tret=%"PRIu64" is done.\n",*addr,ret);
             qemu_plugin_outs(out->str);
-            switch_mode(TRACK,false, 0);
+#ifdef CONFIG_2nd_CCACHE
+            if(second_ccache_flag!=TRACK){
+                switch_mode(TRACK,false, 0);
+            }
+#endif
         }
     }
 }
@@ -252,9 +260,11 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
     tb_num++;
     for (i = 0; i < n; i++) {
         struct qemu_plugin_insn *insn = qemu_plugin_tb_get_insn(tb, i);
+#ifdef CONFIG_2nd_CCACHE
         if (i==0){
             tbIp->ip=qemu_plugin_insn_vaddr(insn);
         }
+#endif
         mem_callback_argument *mem_cb_arg = NULL;
         void *usr_data=NULL;
         CB_TYPE cbType=AFTER;
@@ -628,7 +638,11 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                                              QEMU_PLUGIN_MEM_RW, (void *)mem_cb_arg);
         }
         //register the selected callback
-        if(cb!=NULL && usr_data!=NULL){
+        if(cb!=NULL && usr_data!=NULL
+#ifdef CONFIG_2nd_CCACHE
+                                    && second_ccache_flag
+#endif
+                                    ){
             switch(cbType){
                 case AFTER:
                     qemu_plugin_register_vcpu_after_insn_exec_cb(
@@ -657,7 +671,9 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 //                                                         (void *)tbIp);
 //        }
     }
+#ifdef CONFIG_2nd_CCACHE
     qemu_plugin_register_vcpu_tb_exec_cb(tb, vcpu_tb_exec, QEMU_PLUGIN_CB_NO_REGS, (void *)tbIp);
+#endif
 
 }
 

@@ -196,6 +196,9 @@ static struct tcg_region_state region;
  * struct is found every tree_size bytes.
  */
 static void *region_trees;
+#ifdef CONFIG_2nd_CCACHE
+static void *region_trees_2nd;
+#endif
 static size_t tree_size;
 static TCGRegSet tcg_target_available_regs[TCG_TYPE_COUNT];
 static TCGRegSet tcg_target_call_clobber_regs;
@@ -391,11 +394,21 @@ static void tcg_region_trees_init(void)
 
     tree_size = ROUND_UP(sizeof(struct tcg_region_tree), qemu_dcache_linesize);
     region_trees = qemu_memalign(qemu_dcache_linesize, region.n * tree_size);
+#ifdef CONFIG_2nd_CCACHE
+    region_trees_2nd = qemu_memalign(qemu_dcache_linesize, region.n * tree_size);
+#endif
     for (i = 0; i < region.n; i++) {
         struct tcg_region_tree *rt = region_trees + i * tree_size;
+#ifdef CONFIG_2nd_CCACHE
+        struct tcg_region_tree *rt2 = region_trees_2nd + i * tree_size;
+#endif
 
         qemu_mutex_init(&rt->lock);
         rt->tree = g_tree_new(tb_tc_cmp);
+#ifdef CONFIG_2nd_CCACHE
+        qemu_mutex_init(&rt2->lock);
+        rt2->tree = g_tree_new(tb_tc_cmp);
+#endif
     }
 }
 
@@ -414,7 +427,16 @@ static struct tcg_region_tree *tc_ptr_to_region_tree(void *p)
             region_idx = offset / region.stride;
         }
     }
+#ifdef CONFIG_2nd_CCACHE
+    if (second_ccache_flag){
+        return region_trees_2nd + region_idx * tree_size;
+    }
+    else{
+        return region_trees + region_idx * tree_size;
+    }
+#else
     return region_trees + region_idx * tree_size;
+#endif
 }
 
 void tcg_tb_insert(TranslationBlock *tb)
@@ -458,9 +480,15 @@ static void tcg_region_tree_lock_all(void)
 
     for (i = 0; i < region.n; i++) {
         struct tcg_region_tree *rt = region_trees + i * tree_size;
-
+#ifdef CONFIG_2nd_CCACHE
+        struct tcg_region_tree *rt2 = region_trees_2nd + i * tree_size;
+#endif
         qemu_mutex_lock(&rt->lock);
+#ifdef CONFIG_2nd_CCACHE
+        qemu_mutex_lock(&rt2->lock);
+#endif
     }
+
 }
 
 static void tcg_region_tree_unlock_all(void)
@@ -469,8 +497,13 @@ static void tcg_region_tree_unlock_all(void)
 
     for (i = 0; i < region.n; i++) {
         struct tcg_region_tree *rt = region_trees + i * tree_size;
-
+#ifdef CONFIG_2nd_CCACHE
+        struct tcg_region_tree *rt2 = region_trees_2nd + i * tree_size;
+#endif
         qemu_mutex_unlock(&rt->lock);
+#ifdef CONFIG_2nd_CCACHE
+        qemu_mutex_unlock(&rt2->lock);
+#endif
     }
 }
 
@@ -481,8 +514,13 @@ void tcg_tb_foreach(GTraverseFunc func, gpointer user_data)
     tcg_region_tree_lock_all();
     for (i = 0; i < region.n; i++) {
         struct tcg_region_tree *rt = region_trees + i * tree_size;
-
+#ifdef CONFIG_2nd_CCACHE
+        struct tcg_region_tree *rt2 = region_trees_2nd + i * tree_size;
+#endif
         g_tree_foreach(rt->tree, func, user_data);
+#ifdef CONFIG_2nd_CCACHE
+        g_tree_foreach(rt2->tree, func, user_data);
+#endif
     }
     tcg_region_tree_unlock_all();
 }
@@ -495,8 +533,13 @@ size_t tcg_nb_tbs(void)
     tcg_region_tree_lock_all();
     for (i = 0; i < region.n; i++) {
         struct tcg_region_tree *rt = region_trees + i * tree_size;
-
+#ifdef CONFIG_2nd_CCACHE
+        struct tcg_region_tree *rt2 = region_trees_2nd + i * tree_size;
+#endif
         nb_tbs += g_tree_nnodes(rt->tree);
+#ifdef CONFIG_2nd_CCACHE
+         nb_tbs += g_tree_nnodes(rt2->tree);
+#endif
     }
     tcg_region_tree_unlock_all();
     return nb_tbs;
@@ -509,10 +552,16 @@ static void tcg_region_tree_reset_all(void)
     tcg_region_tree_lock_all();
     for (i = 0; i < region.n; i++) {
         struct tcg_region_tree *rt = region_trees + i * tree_size;
-
+#ifdef CONFIG_2nd_CCACHE
+        struct tcg_region_tree *rt2 = region_trees_2nd + i * tree_size;
+#endif
         /* Increment the refcount first so that destroy acts as a reset */
         g_tree_ref(rt->tree);
         g_tree_destroy(rt->tree);
+#ifdef CONFIG_2nd_CCACHE
+        g_tree_ref(rt2->tree);
+        g_tree_destroy(rt2->tree);
+#endif
     }
     tcg_region_tree_unlock_all();
 }

@@ -236,7 +236,7 @@ void cpu_loop(CPUX86State *env)
             break;
 #ifdef CONFIG_2nd_CCACHE
         case 0x27:
-            //second_ccache_flag = 1;
+//            second_ccache_flag = !second_ccache_flag;
 #ifdef CONFIG_DEBUG_CCACHE_SWITCH
             printf("SUCCESS in switching!\n");
 #endif
