@@ -9,7 +9,7 @@
 static uint32_t x86_regs_mapping[X86_REG_ENDING] = {INVALID_REGISTER};
 void init_register_mapping(void);
 
-#define NUM_MAPPED_REGISTERS 86
+#define NUM_MAPPED_REGISTERS 92
 const uint32_t caps_x86_regs[NUM_MAPPED_REGISTERS] = {
         X86_REG_AH, // R_AH
         X86_REG_AL, //R_AL
@@ -57,6 +57,12 @@ const uint32_t caps_x86_regs[NUM_MAPPED_REGISTERS] = {
         X86_REG_R14, //R_R14
         X86_REG_R15, //R_R15
         X86_REG_RIP,
+        X86_REG_ES, //R_ES
+        X86_REG_CS, //R_CS
+        X86_REG_SS, //R_SS
+        X86_REG_DS, //R_DS
+        X86_REG_FS, //R_FS
+        X86_REG_GS, //R_GS
         X86_REG_MM0,
         X86_REG_MM1,
         X86_REG_MM2,
@@ -147,6 +153,12 @@ const uint32_t qemu_x86_regs[NUM_MAPPED_REGISTERS] = {
         R_R14,
         R_R15,
         R_EIP,
+        R_ES,
+        R_CS,
+        R_SS,
+        R_DS,
+        R_FS,
+        R_GS,
         X86_REG_MM0,
         X86_REG_MM1,
         X86_REG_MM2,

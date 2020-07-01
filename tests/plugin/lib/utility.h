@@ -33,6 +33,13 @@ enum {
     R_BH = 19,
     R_EXTRA = 20,
     R_EIP = 21,
+    R_SEGS = 22,
+    R_ES = 23,
+    R_CS = 24,
+    R_SS = 25,
+    R_DS = 26,
+    R_FS = 27,
+    R_GS = 28,
     R_OTHERS
 };
 
