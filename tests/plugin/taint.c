@@ -263,6 +263,10 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 #ifdef CONFIG_2nd_CCACHE
         if (i==0){
             tbIp->ip=qemu_plugin_insn_vaddr(insn);
+//                if(tbIp->ip>=0x406ED0 && tbIp->ip<0x4070B0){
+//                    char *is=qemu_plugin_insn_disas(insn);
+//                    printf("inst at ip=%lx is %s\n",tbIp->ip,is);
+//                }
         }
 #endif
         mem_callback_argument *mem_cb_arg = NULL;

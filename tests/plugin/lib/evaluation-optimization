@@ -1,0 +1,40 @@
+MacOS
+
+Optimized
+
+TEST                : Iterations/sec.  : Old Index   : New Index
+                    :                  : Pentium 90* : AMD K6/233*
+--------------------:------------------:-------------:------------
+NUMERIC SORT        :          88.474  :       2.27  :       0.75
+STRING SORT         :          3.9711  :       1.77  :       0.27
+BITFIELD            :      9.8823e+06  :       1.70  :       0.35
+FP EMULATION        :          10.757  :       5.16  :       1.19
+FOURIER             :          665.27  :       0.76  :       0.42
+ASSIGNMENT          :          2.4339  :       9.26  :       2.40
+IDEA                :          661.12  :      10.11  :       3.00
+HUFFMAN             :           124.8  :       3.46  :       1.11
+
+no optimization
+
+TEST                : Iterations/sec.  : Old Index   : New Index
+                    :                  : Pentium 90* : AMD K6/233*
+--------------------:------------------:-------------:------------
+NUMERIC SORT        :          11.899  :       0.31  :       0.10
+STRING SORT         :         0.73008  :       0.33  :       0.05
+BITFIELD            :      2.0212e+06  :       0.35  :       0.07
+FP EMULATION        :          1.6822  :       0.81  :       0.19
+FOURIER             :          183.61  :       0.21  :       0.12
+ASSIGNMENT          :         0.26437  :       1.01  :       0.26
+IDEA                :          27.954  :       0.43  :       0.13
+HUFFMAN             :          18.494  :       0.51  :       0.16
+
+Full tainted
+
+NUMERIC SORT        :          13.156  :       0.34  :       0.11
+STRING SORT         :         0.64628  :       0.29  :       0.04
+BITFIELD            :      5.3839e+06  :       0.92  :       0.19
+FP EMULATION        :          7.3716  :       3.54  :       0.82 **
+FOURIER             :           531.6  :       0.60  :       0.34
+ASSIGNMENT          :         0.92241  :       3.51  :       0.91
+IDEA                :          306.59  :       4.69  :       1.39
+HUFFMAN             :          78.572  :       2.18  :       0.70 **
