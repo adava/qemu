@@ -68,7 +68,7 @@ g_autofree gchar *o2 = g_strdup_printf("SHADOW error in %s inst callback#\topera
 qemu_plugin_outs(o2);}
 
 #else
-#define DEBUG_OUTPUT(arg, inst_s)
+#define DEBUG_OUTPUT(arg, inst_s) //if(debug_ip==0x402930) printf("%s\n",inst_s);
 #define OUTPUT_ERROR(err, arg, inst_s) if (err){\
 ;}
 #endif
@@ -83,7 +83,7 @@ qemu_plugin_outs(o2);}
                                     g_autofree gchar *o2 = g_strdup_printf("#op_mem callback#\tvaddr=%lx\n",*(uint64_t *)(vaddr));\
                                     qemu_plugin_outs(o2);}
 #else
-#define DEBUG_MEMCB_OUTPUT(vaddr)
+#define DEBUG_MEMCB_OUTPUT(vaddr) //if(debug_ip==0x402930) printf("#op_mem callback#\tvaddr=%lx\n",*(uint64_t *)(vaddr));
 #endif
 
 #ifdef LOG_INS

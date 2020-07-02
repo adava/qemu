@@ -21,12 +21,12 @@
 #define DoIDEA_exit_bb 0x408AA9
 #define id_array_reg MAP_X86_REGISTER(X86_REG_RBX)
 #define id_array_size  0x8
-#define SetupCPUEmFloatArrays_exit_bb 0x402D30
-#define fem_array_reg MAP_X86_REGISTER(X86_REG_RBX) //RDI (first param) is copied to RBX
-#define fem_size_reg  MAP_X86_REGISTER(X86_REG_R13) //RCX (fourth param) is copied to R13
-#define createtextline_exit_bb 0x409500
-#define HM_array_stack_offset 0x30
-#define HM_size_stack_offset  0x38
+#define SetupCPUEmFloatArrays_exit_bb 0x408047  //0x402D30
+#define fem_array_reg MAP_X86_REGISTER(X86_REG_RDI) //For this program, I taint after the function returns. Inside function, RDI (first param) is copied to RBX
+#define fem_size_reg  MAP_X86_REGISTER(X86_REG_RCX) //For this program, I taint after the function returns. Inside function, RCX (fourth param) is copied to R13
+#define createtextline_exit_bb 0x409500 //this should be the correct place because in that block 0Ah (\n) is written to somewhere like the source code
+#define HM_array_reg MAP_X86_REGISTER(X86_REG_RSI)
+#define HM_size_reg  MAP_X86_REGISTER(X86_REG_RBP)
 
 //The key is to know what memory location/register has the pointer to the array
 
@@ -39,7 +39,7 @@ void taint_nbench_arginregs(uint64_t current_ip, uint64_t bb_addr, uint32_t addr
         uint64_t mem_size=0;
         shad_inq inq2 = {.type=GLOBAL, .addr.id=size_reg,.size=SHD_SIZE_u64};
         READ_VALUE(inq2,&mem_size);
-
+//        printf("tainting ...!\n");
         uint8_t value = 0xff;
         SHD_write_contiguous(mem_addr, mem_size, value);
 //        printf("addr=0x%lx, size=0x%lx\n",mem_addr,mem_size);

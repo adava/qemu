@@ -131,6 +131,7 @@ static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
     if (udata!=NULL){
         arg = (mem_callback_argument *)udata;
         *(arg->addr) = vaddr;
+        DEBUG_MEMCB_OUTPUT(arg->addr);
 #ifdef CONFIG_2nd_CCACHE
         shad_inq inq = {.addr.vaddr=vaddr,.type=MEMORY,.size=SHD_SIZE_u64};
         SHD_value shd=SHD_get_shadow(inq);
@@ -148,7 +149,6 @@ static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
     else{
         assert(0);
     }
-    DEBUG_MEMCB_OUTPUT(arg->addr);
 }
 
 static void op_record_values(unsigned int cpu_index, void *udata) {
@@ -260,15 +260,6 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
     tb_num++;
     for (i = 0; i < n; i++) {
         struct qemu_plugin_insn *insn = qemu_plugin_tb_get_insn(tb, i);
-#ifdef CONFIG_2nd_CCACHE
-        if (i==0){
-            tbIp->ip=qemu_plugin_insn_vaddr(insn);
-//                if(tbIp->ip>=0x406ED0 && tbIp->ip<0x4070B0){
-//                    char *is=qemu_plugin_insn_disas(insn);
-//                    printf("inst at ip=%lx is %s\n",tbIp->ip,is);
-//                }
-        }
-#endif
         mem_callback_argument *mem_cb_arg = NULL;
         void *usr_data=NULL;
         CB_TYPE cbType=AFTER;
@@ -279,7 +270,15 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
         qemu_plugin_vcpu_udata_cb_t cb=NULL;
 
         cb_args = analyze_Operands(inst_det->operands,inst_det->op_count);
-
+#ifdef CONFIG_2nd_CCACHE
+        if (i==0){
+            tbIp->ip=qemu_plugin_insn_vaddr(insn);
+//                if(tbIp->ip==0x402930){
+//                    char *is=qemu_plugin_insn_disas(insn);
+//                    printf("inst at ip=%lx is %s\n",tbIp->ip,is);
+//                }
+        }
+#endif
         switch(cs_ptr->id){
             case X86_INS_CMOVA:
             case X86_INS_CMOVAE:

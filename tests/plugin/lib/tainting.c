@@ -1,23 +1,23 @@
 //
 // Created by sina on 4/28/20.
 //
-
-#include <stdlib.h>
-#include <qemu-plugin.h>
-#include "lib/tainting.h"
-#include "lib/taint_propagation.c"
-#include "lib/shadow_memory.c"
-
 //#define DEBUG_MEMCB
 //#define LOG_INS
 //#define DEBUG_CB
 #define DEBUG_SYSCALL 0
 #define NBENCH_EVALUATION
 
+//uint64_t debug_ip = 0;
 
+#include <stdlib.h>
+#include <qemu-plugin.h>
+#include "lib/tainting.h"
+#include "lib/taint_propagation.c"
+#include "lib/shadow_memory.c"
 #ifdef NBENCH_EVALUATION
 #include "nbench_instrument.c"
 #endif
+
 
 static void taint_cb_mov(unsigned int cpu_index, void *udata){ //use taint_cb prefix instead of SHD
     shadow_err err = 0;
@@ -209,6 +209,7 @@ static void taint_cb_TEST(unsigned int cpu_index, void *udata){
 static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
     shadow_err err = 0;
     INIT_ARG(arg,udata);
+    DEBUG_OUTPUT(arg,"taint_cb_MUL_DIV");
     arg->dst.type = GLOBAL;
     switch(arg->src.size){
         case SHD_SIZE_u8:
@@ -239,7 +240,6 @@ static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
         default:
             assert(0);
     }
-    DEBUG_OUTPUT(arg,"taint_cb_MUL_DIV");
     err = SHD_add_sub(arg->src,arg->dst,&arg->dst);//the first propagation for 1 byte case, and the 2nd otherwise.
 
     shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
@@ -406,16 +406,18 @@ static void taint_list_all(void){
 static void vcpu_tb_exec(unsigned int cpu_index, void *udata)
 {
     tb_ip *tbIp = (tb_ip *)udata;
+//    debug_ip = tbIp->ip;
     shadow_err err;
 #ifdef NBENCH_EVALUATION
     taint_nbench_arginregs(tbIp->ip, LoadNumArrayWithRand_exit_bb,sort_array_reg,sort_size_reg);
     taint_nbench_str(tbIp->ip, LoadStringArray_exit_bb);
     taint_nbench_arginregs(tbIp->ip, DoBitfieldIteration_exit_bb,bf_array_reg,bf_size_reg);
-//    taint_nbench_arginregs(tbIp->ip, SetupCPUEmFloatArrays_exit_bb,fem_array_reg,fem_size_reg);
+    taint_nbench_arginregs(tbIp->ip, SetupCPUEmFloatArrays_exit_bb,fem_array_reg,fem_size_reg);
     taint_nbench_arginregs(tbIp->ip, DoFPUTransIteration_exit_bb,fp_array_reg,fp_size_reg);
     taint_nbench_arginreg_fix(tbIp->ip, LoadAssign_exit_bb,la_array_reg,la_array_size);
     taint_nbench_arginreg_fix(tbIp->ip, DoIDEA_exit_bb,id_array_reg,id_array_size);
-    taint_nbench_array(tbIp->ip, createtextline_exit_bb, HM_array_stack_offset, HM_size_stack_offset);
+    taint_nbench_arginregs(tbIp->ip, createtextline_exit_bb,HM_array_reg,HM_size_reg);
+//    taint_nbench_array(tbIp->ip, createtextline_exit_bb, HM_array_stack_offset, HM_size_stack_offset);
 
 #endif
     if(second_ccache_flag==TRACK){
