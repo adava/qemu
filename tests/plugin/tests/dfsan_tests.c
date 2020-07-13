@@ -3,6 +3,8 @@
 //
 // For testing compile with -pie -fPIE options; gcc -pie -fPIE -o tests/dfsan_tests.o tests/dfsan_tests.c; ./s/dfsan_tests.o
 
+#define GLOBAL_POOL_SIZE 254
+
 #include <assert.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -77,6 +79,27 @@ void test_dfsan_simple(){
 
     const dfsan_label_info *inf1 = dfsan_get_label_info(l2);
     printf("checking dfsan_get_label_info api:\tdfsan_label_info.tdesc=%s\n",inf1->desc);
+
+    dfsan_label l3=dfsan_create_label(tdesc, &userdata);
+    assert(l3>0);
+
+    void *addr2 = (void *)0x807f00;
+
+    dfsan_label l4 = dfsan_union(l1, l3);
+    printf("checking whether l1=%d and l3=%d is part of l4=%d\n", l4, l1, l3);
+    int c1 = dfsan_has_label(l4, l1);
+    assert(c1);
+    int c2 = dfsan_has_label(l4, l3);
+    assert(c2);
+    printf("checking registers shadow at %p len=%d is set to 0\n", registers_shadow, GLOBAL_POOL_SIZE);
+    for (int i=0;i<GLOBAL_POOL_SIZE;i++){
+        assert(registers_shadow[i]==0);
+    }
+    int reg_id = 21;
+    printf("checking reg_id=%d label set and get to label=%d\n",reg_id,l1);
+    dfsan_set_register_label(reg_id, l1);
+    dfsan_label t1 = dfsan_get_register_label(reg_id);
+    assert(t1==l1);
 }
 
 __attribute__((section(".init_array")))

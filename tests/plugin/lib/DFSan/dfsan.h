@@ -25,6 +25,9 @@
 
 // Copy declarations from public sanitizer/dfsan_interface.h header here.
 typedef uint16_t dfsan_label;
+
+dfsan_label registers_shadow[GLOBAL_POOL_SIZE];
+
 void internal_iserror(int retval, char *err);
 void UnmapOrDie(void *addr, uint64_t size);
 int GetNamedMappingFd(const char *name, uint32_t size, int *flags);

@@ -16,6 +16,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define dfsan_set_register_label(reg, label) \
+        assert(reg<GLOBAL_POOL_SIZE); \
+        registers_shadow[reg]=label;
+
+#define dfsan_get_register_label(reg) reg<GLOBAL_POOL_SIZE?registers_shadow[reg]:-1
+
 typedef uint16_t dfsan_label;
 
 /// Stores information associated with a specific label identifier.  A label

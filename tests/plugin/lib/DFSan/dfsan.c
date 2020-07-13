@@ -150,7 +150,7 @@ int GetNamedMappingFd(const char *name, uint32_t size, int *flags) {
     int fd = open(shmname, O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC, S_IRWXU);
     assert(fd>=0);
     int res = ftruncate(fd, size);
-    internal_iserror(res,"ftruncate error");
+    internal_iserror(res,(char *)"ftruncate error");
     res = unlink(shmname);
     assert(res==0);
     return fd;
@@ -379,4 +379,8 @@ static void dfsan_init(void){
   if (!(init_addr >= UnusedAddr() && init_addr < AppAddr()))
     MmapFixedNoAccess(UnusedAddr(), AppAddr() - UnusedAddr(),"unused");
   __dfsan_label_info[kInitializingLabel].desc = "<init label>";
+
+  //initialize registers' labels to zero
+  memset(registers_shadow,0,GLOBAL_POOL_SIZE*sizeof(dfsan_label));
+
 }
