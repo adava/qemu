@@ -48,11 +48,11 @@ inline uint64_t ShadowAddr(void) {
 }
 
 inline uint64_t UnionTableAddr(void) {
-    return MappingImpl(MAPPING_SHADOW_ADDR);
+    return MappingImpl(MAPPING_UNION_TABLE_ADDR);
 }
 
 inline uint64_t AppAddr(void) {
-    return MappingImpl(MAPPING_SHADOW_ADDR);
+    return MappingImpl(MAPPING_APP_ADDR);
 }
 
 inline uint64_t ShadowMask(void) {
