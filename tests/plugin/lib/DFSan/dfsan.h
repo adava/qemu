@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <sys/file.h>
 #include <sys/mman.h>
+//#define GLOBAL_POOL_SIZE 254
 #include "dfsan_platform.h"
 
 #define Swap(type,a,b) \

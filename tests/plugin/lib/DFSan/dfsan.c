@@ -19,12 +19,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "dfsan.h"
+#include <sys/time.h>
+#include <sys/resource.h>
 #define kNumLabels  (1 << (sizeof(dfsan_label) * 8))
 
 bool fast16labels = false;
 typedef uint16_t atomic_dfsan_label;
 static const dfsan_label kInitializingLabel = -1;
-char *dump_labels_at_exit;
+const char *dump_labels_at_exit = "dfsan_labels.txt";
 
 static atomic_dfsan_label __dfsan_last_label;
 static dfsan_label_info __dfsan_label_info[kNumLabels];
@@ -47,13 +49,12 @@ typedef atomic_dfsan_label dfsan_union_table_t[kNumLabels][kNumLabels];
 // +--------------------+ 0x000000000000
 //
 // To derive a shadow memory address from an application memory address,
-// bits 44-46 are cleared to bring the address into the range
+// bits 44-46 are cleared to bring the address into the range    //44-46 are fixed for all app addressed (representing 7 and then 8 is next addr)
 // [0x000000008000,0x100000000000).  Then the address is shifted left by 1 to
-// account for the double byte representation of shadow labels and move the
+// account for the double byte representation of shadow labels and move the //each shadow address would store a 16 bit ID, hence double byte representation
 // address into the shadow memory range.  See the function shadow_for below.
 
 // On Linux/MIPS64, memory is laid out as follows:
-//
 // +--------------------+ 0x10000000000 (top of memory)
 // | application memory |
 // +--------------------+ 0xF000008000 (kAppAddr)
@@ -120,6 +121,8 @@ typedef atomic_dfsan_label dfsan_union_table_t[kNumLabels][kNumLabels];
 // | reserved by kernel |
 // +--------------------+ 0x0000000000
 
+void *shadow_start=(void *)0x0000010000;
+
 static uint64_t UnusedAddr(void);
 static atomic_dfsan_label *union_table(dfsan_label l1, dfsan_label l2);
 static void dfsan_check_label(dfsan_label label);
@@ -129,8 +132,9 @@ dfsan_label __dfsan_union(dfsan_label l1, dfsan_label l2);
 
 
 
-static inline dfsan_label *shadow_for(const void *ptr) {
-    return (dfsan_label *) ((((uint64_t) ptr) & ShadowMask()) << 1);
+static inline dfsan_label *shadow_for(const void *ptr) { //sina: this new implementation might result in collision e.g. one address falling below the shadow memory area and one above.
+    uint64_t index = ((((uint64_t) ptr) & ShadowMask()) << 1);
+    return (dfsan_label *)(shadow_start + index);
 }
 
 void UnmapOrDie(void *addr, uint64_t size) {
@@ -150,6 +154,7 @@ int GetNamedMappingFd(const char *name, uint32_t size, int *flags) {
     int fd = open(shmname, O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC, S_IRWXU);
     assert(fd>=0);
     int res = ftruncate(fd, size);
+//    printf("%s res=%d\n",shmname,res);
     internal_iserror(res,(char *)"ftruncate error");
     res = unlink(shmname);
     assert(res==0);
@@ -157,10 +162,14 @@ int GetNamedMappingFd(const char *name, uint32_t size, int *flags) {
 }
 
 void *MmapNamed(void *addr, uint64_t length, int prot, int flags, const char *name) {
-    int fd = GetNamedMappingFd(name, length, &flags);
-    void *res = mmap(addr, length, prot, flags, fd, 0);
+//    printf("mapping addr=0x%p, size=0x%lx\n",addr, length);
+//    int fd = GetNamedMappingFd(name, length, &flags);
+//    void *res = mmap(addr, length, prot, flags, fd, 0);
+    void *res = mmap(NULL, length, prot, flags, -1, 0);
+
     if (res>0){
 //        prctl(PR_SET_VMA, PR_SET_VMA_ANON_NAME, addr, size, (uint64_t)name);
+//        printf("mmap res=%p\n",res);
         return res;
     }
     else{
@@ -172,8 +181,8 @@ void *MmapNamed(void *addr, uint64_t length, int prot, int flags, const char *na
 static bool MmapFixed(uint64_t fixed_addr, uint64_t size, int additional_flags, const char *name) {
     size = (size + 4096 - 1) & ~(4096 - 1);
     fixed_addr = fixed_addr & ~(4096 - 1);
-    MmapNamed((void *)fixed_addr, size, PROT_READ | PROT_WRITE,
-              MAP_PRIVATE | MAP_FIXED | additional_flags | MAP_ANON, name); //sina: MAP_FIXED fails when not at init
+    shadow_start = MmapNamed((void *)fixed_addr, size, PROT_READ | PROT_WRITE,
+              MAP_PRIVATE /*| MAP_FIXED */ | additional_flags | MAP_ANON, name); //sina: MAP_FIXED fails when not position dependent
     return true;
 }
 
@@ -183,7 +192,7 @@ bool MmapFixedNoReserve(uint64_t fixed_addr, uint64_t size, const char *name) {
 
 void *MmapFixedNoAccess(uint64_t fixed_addr, uint64_t size, const char *name) {
     return (void *)MmapNamed((void *)fixed_addr, size, PROT_NONE,
-                             MAP_PRIVATE | MAP_FIXED | MAP_NORESERVE | MAP_ANON,
+                             MAP_PRIVATE /*| MAP_FIXED */ | MAP_NORESERVE | MAP_ANON,
                              name);
 }
 
@@ -368,8 +377,17 @@ void dfsan_flush(void) {
 // Memory mapping fails if compiled without gcc -pie -fPIE options
 
 static void dfsan_init(void){
-  if (!MmapFixedNoReserve(ShadowAddr(), UnusedAddr() - ShadowAddr(),"shadow"))
-    assert(0);
+
+//    struct rlimit rlim;
+//    getrlimit(RLIMIT_FSIZE, &rlim);
+//    if(rlim.rlim_max<=0xffffdffe00010000){ //it's the size used for unused memory
+//        rlim.rlim_max=0xffffffffffffffff;
+//        setrlimit(RLIMIT_FSIZE, &rlim);
+//    }
+//    printf("rlimit=0x%lx\n",rlim.rlim_max);
+
+    if (!MmapFixedNoReserve(ShadowAddr(), UnusedAddr() - ShadowAddr(),"shadow")) //0x1ffff0000 is the largest size I could try with fixed_addr
+            assert(0);
   // Protect the region of memory we don't use, to preserve the one-to-one
   // mapping from application to shadow memory. But if ASLR is disabled, Linux
   // will load our executable in the middle of our unused region. This mostly
