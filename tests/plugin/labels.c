@@ -22,7 +22,7 @@
 #include <capstone.h>
 #include <stdint.h>
 //#include "lib/shadow_memory.h"
-#include "lib/tainting.c"
+#include "lib/DFSan_taint.c"
 
 QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
@@ -94,7 +94,7 @@ static inline qemu_plugin_vcpu_udata_cb_t analyze_LEA_Addr(inst_callback_argumen
         res->src3.type = IMMEDIATE;
         res->src3.size = SHD_SIZE_u32;
     }
-    return taint_cb_LEA;
+    return taint_cb_ADD_SUB;
 }
 
 static inline inst_callback_argument *analyze_Operands(cs_x86_op *operands,int numOps){
@@ -173,7 +173,7 @@ static void plugin_exit(qemu_plugin_id_t id, void *p)
     g_autofree gchar *report = g_strdup_printf("\nDEBUG output end:\n");
     qemu_plugin_outs(report);
 
-    taint_list_all();
+    dfsan_fini();
 
     g_autoptr(GString) end_rep = g_string_new("\n");
     print_unsupported_ins(end_rep,unsupported_ins_log);
@@ -186,14 +186,14 @@ static void plugin_init(void)
     g_autoptr(GString) report = g_string_new("Initialization:\n");
 #ifdef CONFIG_2nd_CCACHE
     printf("2nd code cache optimization is activated!\n");
-#endif
 #ifndef CONFIG_DEBUG_CCACHE_SWITCH
-    printf("debugging information for 2nd code cache optimization would not be printed!\n");
+printf("debugging information for 2nd code cache optimization would not be printed!\n");
+#endif
 #endif
     unsupported_ins_log =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     syscall_rets =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
-    init_register_mapping();
-    SHD_init();
+
+    dfsan_init();
 #ifdef CONFIG_2nd_CCACHE
     second_ccache_flag = CHECK;
 #endif
@@ -235,8 +235,8 @@ static void syscall_ret_callback(qemu_plugin_id_t id, unsigned int vcpu_idx, int
         g_string_append_printf(out,"\tTainting syscall num: %"PRIu64, num);
         uint64_t *addr = g_hash_table_lookup(syscall_rets, (gpointer)num);
         if(addr!=NULL){
-            uint8_t value = 0xff;
-            SHD_write_contiguous(*addr, ret, value);
+            //create a label per byte
+            mark_input_bytes((void *)*addr, ret);
             int removed = g_hash_table_remove(syscall_rets, (gpointer)num);
             g_assert(removed);
             g_string_append_printf(out,"\t addr=0x%"PRIx64"\tret=%"PRIu64" is done.\n",*addr,ret);
@@ -302,6 +302,8 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_MOVABS:
             case X86_INS_MOVZX:
             case X86_INS_MOV:
+            case X86_INS_MOVSX:
+            case X86_INS_MOVSXD:
                  //better to take this outside, and set it to NULL for otherwise case
                 cb_args->src.type==IMMEDIATE?(cb = taint_cb_clear):(cb = taint_cb_mov);
                 nice_print(cs_ptr);
@@ -317,7 +319,9 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_BTR:
             case X86_INS_BTS:
                 //only propagate conservatively to the flags
-                cb = taint_cb_SETF;
+                cb_args->dst.type = GLOBAL;
+                cb_args->dst.addr.id = FLAG_REG;
+                cb = taint_cb_mov;
                 nice_print(cs_ptr);
                 break;
             case X86_INS_PUSH:
@@ -335,46 +339,36 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 break;
               /*dst = LEFT(UNION(src1,SHIFT(src2,sh_val)))*/
             case X86_INS_LEA:
-                nice_print(cs_ptr);
                 cb = analyze_LEA_Addr(cb_args,&inst_det->operands[0].mem);
+                nice_print(cs_ptr);
                 break;
+            case X86_INS_SHR: //since we are not precise, all arithmetics are similar
+            case X86_INS_SAR:
+            case X86_INS_SHL:
+            case X86_INS_AND:
+            case X86_INS_OR:
+            case X86_INS_ROR:
+            case X86_INS_XOR:
             case X86_INS_SUB:
             case X86_INS_ADD:
-                if (cb_args->src.type==IMMEDIATE){
-                    cb = taint_cb_EXTENDL; //we need a left extension like inc/dec but the instruction had two operands
-                    copy_inq(cb_args->dst, cb_args->src); //copy dst to src
-                }
-                else{
-                    copy_inq(cb_args->dst,cb_args->src2);
-                    cb = taint_cb_ADD_SUB;
-                }
+                copy_inq(cb_args->dst, cb_args->src2);
+                cb = taint_cb_ADD_SUB;
                 nice_print(cs_ptr);
                 break;
             case X86_INS_ADC:
             case X86_INS_SBB:
-                cb = taint_cb_ADC_SBB;
+                copy_inq(cb_args->dst, cb_args->src2);
+                cb_args->src3.type = GLOBAL;
+                cb_args->src3.addr.id = FLAG_REG;
+                cb = taint_cb_ADD_SUB;
                 nice_print(cs_ptr);
                 break;
             case X86_INS_CMP:
-                cb = taint_cb_CMP; //another version of Add/SUB without storing the shadow result
-                nice_print(cs_ptr);
-                break;
-            case X86_INS_NEG:
-            case X86_INS_INC:
-            case X86_INS_DEC:
-                copy_inq(cb_args->src,cb_args->dst); //has only one operand, only src is valid
-                cb = taint_cb_EXTENDL;
-                nice_print(cs_ptr);
-                break;
-            case X86_INS_CBW:
-                ALLOC_SET0(cb_args,inst_callback_argument)
-                cb_args->src.type = GLOBAL;
-                cb_args->src.addr.id = R_AL;
-                cb_args->src.size = SHD_SIZE_u8;
+            case X86_INS_TEST:
+                copy_inq(cb_args->dst,cb_args->src2);
                 cb_args->dst.type = GLOBAL;
-                cb_args->dst.addr.id = R_AH;
-                cb_args->dst.size = SHD_SIZE_u8;
-                cb = taint_cb_EXTENDL;
+                cb_args->dst.addr.id = FLAG_REG;
+                cb = taint_cb_ADD_SUB; //another version of Add/SUB without storing the shadow result
                 nice_print(cs_ptr);
                 break;
             case X86_INS_CWD:
@@ -385,71 +379,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb_args->dst.type = GLOBAL;
                 cb_args->dst.addr.id = R_EDX;
                 cb_args->dst.size = SHD_SIZE_u16;
-                cb = taint_cb_EXTENDL;
-                nice_print(cs_ptr);
-                break;
-            case X86_INS_CWDE:
-            case X86_INS_CQO: //cqto
-                ALLOC_SET0(cb_args,inst_callback_argument)
-                cb_args->src.type = GLOBAL;
-                cb_args->src.addr.id = R_EAX;
-                cb_args->src.size = SHD_SIZE_u16;
-                cb_args->dst.type = GLOBAL;
-                cb_args->dst.addr.id = R_EAX;
-                cb_args->dst.size = SHD_SIZE_u32;
-                cb = taint_cb_EXTENDL;
-                nice_print(cs_ptr);
-                break;
-            case X86_INS_CDQ:
-            case X86_INS_CDQE: //cltq
-                ALLOC_SET0(cb_args,inst_callback_argument)
-                cb_args->src.type = GLOBAL;
-                cb_args->src.addr.id = R_EAX;
-                cb_args->src.size = SHD_SIZE_u32;
-                cb_args->dst.type = GLOBAL;
-                cb_args->dst.addr.id = R_EAX;
-                cb_args->dst.size = SHD_SIZE_u64;
-                cb = taint_cb_EXTENDL;
-                nice_print(cs_ptr);
-                break;
-            case X86_INS_MOVSX:
-            case X86_INS_MOVSXD:
-                cb = taint_cb_EXTENDL;
-                //print_ops(cs_ptr->mnemonic, cs_ptr->op_str);
-                nice_print(cs_ptr);
-                break;
-            case X86_INS_XOR:
-                if (cb_args->src.type==IMMEDIATE){
-                    cb = taint_cb_mov;
-                    copy_inq(cb_args->dst, cb_args->src);
-                }
-                else{
-                    cb = taint_cb_XOR;
-                }
-                nice_print(cs_ptr);
-                break;
-            case X86_INS_SHR:
-            case X86_INS_SAR:
-            case X86_INS_SHL:
-            case X86_INS_ROR:
-            case X86_INS_ROL:
-//          case X86_INS_SAL: //not included in memcheck shift rules
-                set_opId(cs_ptr->id,cb_args->operation); //sets proper cb_args->operation enum value
-                cb = taint_cb_SR;
-                nice_print(cs_ptr);
-                break;
-            case X86_INS_AND:
-            case X86_INS_OR:
-                set_opId(cs_ptr->id,cb_args->operation);
-                cb = taint_cb_AND_OR;
-                ALLOC_SET0(cb_args->vals,inst_callback_values);
-                qemu_plugin_register_vcpu_insn_exec_cb(
-                        insn, op_record_values , QEMU_PLUGIN_CB_NO_REGS, (void *)cb_args);
-//                cbType = BEFORE;
-                nice_print(cs_ptr);
-                break;
-            case X86_INS_TEST:
-                cb = taint_cb_TEST;
+                cb = taint_cb_mov;
                 nice_print(cs_ptr);
                 break;
             case X86_INS_XCHG:
@@ -468,28 +398,57 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                     nice_print(cs_ptr);
                     break;
                 }
-                else if (inst_det->op_count==3){
-                    copy_inq(cb_args->src2, cb_args->src); //copy dst to src
-                    cb = taint_cb_EXTENDL; //we need a left extension
+                else if (inst_det->op_count==3){ //src is immediate
+                    copy_inq(cb_args->src2, cb_args->src); //copy src2 to src
+                    cb = taint_cb_mov;
 //                    print_ops(cs_ptr->mnemonic, cs_ptr->op_str);
                     nice_print(cs_ptr);
                     break;
                 }
             case X86_INS_MUL:
             case X86_INS_DIV:
+                cb_args->src2.type = GLOBAL;
+                cb_args->src2.addr.id = MAP_X86_REGISTER(X86_REG_RAX);
+                cb_args->src3.type = GLOBAL;
+                cb_args->src3.addr.id = MAP_X86_REGISTER(X86_REG_RDX);
                 cb = taint_cb_MUL_DIV;
                 nice_print(cs_ptr);
                 break;
-            case X86_INS_SYSCALL: //tainting input is handled in system call cb
-                ALLOC_SET0(cb_args,inst_callback_argument)
-                cb = taint_cb_SYSCALL;
-                nice_print(cs_ptr);
-                break;
+            case X86_INS_CDQ:
+            case X86_INS_CDQE: //cltq, propagates from EAX to RAX but we track the entire RAX
+            case X86_INS_CBW: //propagates from AL to AH but we track the entire RAX
+            case X86_INS_CWDE:
+            case X86_INS_CQO: //cqto, /propagates from AX to EAX but we track the entire RAX
+            case X86_INS_NEG:
+            case X86_INS_INC:
+            case X86_INS_DEC:
             case X86_INS_NOP:
             case X86_INS_NOT:
                 free(cb_args);
                 cb_args = NULL;
                 nice_print(cs_ptr); //implemented but NOT wouldn't change the taint status
+                break;
+            case X86_INS_SYSCALL: //tainting input is handled in system call cb
+                ALLOC_SET0(cb_args,inst_callback_argument)
+
+                cb_args->src.addr.id=MAP_X86_REGISTER(X86_REG_RCX);
+                cb_args->src.type=GLOBAL;
+                cb_args->src.size=SHD_SIZE_u64;
+
+                cb_args->dst.addr.id=MAP_X86_REGISTER(X86_REG_RSP); //propagate from RCX to RSP
+                cb_args->dst.type=GLOBAL;
+                cb_args->dst.size=SHD_SIZE_u64;
+
+                cb_args->src2.addr.id=MAP_X86_REGISTER(X86_REG_RDX);
+                cb_args->src2.type=GLOBAL;
+                cb_args->src2.size=SHD_SIZE_u64;
+
+                cb_args->src3.addr.id=MAP_X86_REGISTER(X86_REG_RIP); //propagate from RDX to RSP
+                cb_args->src3.type=GLOBAL;
+                cb_args->src3.size=SHD_SIZE_u64;
+
+                cb = taint_cb_mov2;
+                nice_print(cs_ptr);
                 break;
             case X86_INS_JAE:
             case X86_INS_JA:
@@ -512,7 +471,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb_args->operation = COND_JMP;
 //            case X86_INS_JRCXZ: special instruction, checks registers instead of flags
             case X86_INS_JMP:
-                cb = taint_cb_JUMP;
+                cb = taint_cb_JUMP; //no propagation, just checking whether the branch condition is tainted
                 cbType = cb_args->src.type==MEMORY?INMEM:BEFORE;
                 nice_print(cs_ptr);
                 break;
@@ -541,19 +500,52 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 break;
             case X86_INS_CPUID:
                 ALLOC_SET0(cb_args,inst_callback_argument)
-                cb = taint_cb_CPUID;
+                cb_args->src.addr.id=MAP_X86_REGISTER(X86_REG_RAX);
+                cb_args->src.type=GLOBAL;
+                cb_args->src.size=SHD_SIZE_u64;
+
+                cb_args->src2.addr.id=MAP_X86_REGISTER(X86_REG_RBX);
+                cb_args->src2.type=GLOBAL;
+                cb_args->src2.size=SHD_SIZE_u64;
+
+                cb_args->src3.addr.id=MAP_X86_REGISTER(X86_REG_RCX);
+                cb_args->src3.type=GLOBAL;
+                cb_args->src3.size=SHD_SIZE_u64;
+
+                cb_args->dst.addr.id=MAP_X86_REGISTER(X86_REG_RDX);
+                cb_args->dst.type=GLOBAL;
+                cb_args->dst.size=SHD_SIZE_u64;
+
+                cb = taint_cb_clear_all;
                 nice_print(cs_ptr);
                 break;
             case X86_INS_RDTSC:
                 //print_ops(cs_ptr->mnemonic, cs_ptr->op_str);
                 ALLOC_SET0(cb_args,inst_callback_argument)
-                cb = taint_cb_RDTSC;
+                cb_args->src.addr.id=MAP_X86_REGISTER(X86_REG_RAX);
+                cb_args->src.type=GLOBAL;
+                cb_args->src.size=SHD_SIZE_u64;
+
+                cb_args->src2.addr.id=MAP_X86_REGISTER(X86_REG_RDX);
+                cb_args->src2.type=GLOBAL;
+                cb_args->src2.size=SHD_SIZE_u64;
+
+                cb = taint_cb_clear_all;
                 nice_print(cs_ptr);
                 break;
             case X86_INS_LEAVE:
                 ALLOC_SET0(cb_args,inst_callback_argument)
                 cb_args->src.type = MEMORY;
                 cb_args->src.size = SHD_SIZE_u64;
+
+                cb_args->src2.addr.id=MAP_X86_REGISTER(X86_REG_RBP);
+                cb_args->src2.type=GLOBAL;
+                cb_args->src2.size=SHD_SIZE_u64;
+
+                cb_args->dst.addr.id=MAP_X86_REGISTER(X86_REG_RSP);
+                cb_args->dst.type=GLOBAL;
+                cb_args->dst.size=SHD_SIZE_u64;
+
                 cb = taint_cb_LEAVE;
                 nice_print(cs_ptr);
                 break;
@@ -574,9 +566,8 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_SETP:
             case X86_INS_SETS:
                 copy_inq(cb_args->src,cb_args->dst);
-                cb_args->src.addr.id = 0;
-                cb_args->src.type = FLAG;
-                cb_args->src.size = SHD_SIZE_u8;
+                cb_args->src.addr.id = FLAG_REG;
+                cb_args->src.type = GLOBAL;
                 cb = taint_cb_mov;
                 nice_print(cs_ptr);
                 break;
@@ -591,26 +582,17 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb_args->src.type=GLOBAL;
 //                cb_args->src.size=cb_args->dst.size; already set to that
                 cb = taint_cb_mov;
-//                cb = taint_cb_STOS;
                 cbType = INMEM;
-//                print_ops(cs_ptr->mnemonic, cs_ptr->op_str);
                 nice_print(cs_ptr);
                 break;
             default:
                 if(inst_det->op_count==2){ // a majority of SSE instructions are handled here
-                    cb = cb_args->src.type==IMMEDIATE? taint_cb_clear : taint_cb_conservative;
+                    cb = cb_args->src.type==IMMEDIATE? taint_cb_clear : taint_cb_mov;
                     nice_print(cs_ptr);
                 }
                 else if(inst_det->op_count==3){
-                    if (cb_args->src.type==IMMEDIATE){
-                        copy_inq(cb_args->src2,cb_args->src);
-                        cb = taint_cb_conservative;
-                        nice_print(cs_ptr);
-                    }
-                    else if(cb_args->src2.type==IMMEDIATE){
-                        cb = taint_cb_conservative;
-                        nice_print(cs_ptr);
-                    }
+                    cb = taint_cb_ADD_SUB;
+                    nice_print(cs_ptr);
                 }
                 else{
                     free(cb_args);
@@ -696,7 +678,7 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
     }
 
     plugin_init();
-
+//    printf("here\n");
     qemu_plugin_register_vcpu_tb_trans_cb(id, vcpu_tb_trans);
     qemu_plugin_register_atexit_cb(id, plugin_exit, NULL);
     qemu_plugin_register_vcpu_syscall_cb(id, syscall_callback);

@@ -5,150 +5,138 @@
 //#define LOG_INS
 //#define DEBUG_CB
 #define DEBUG_SYSCALL 0
-#define NBENCH_EVALUATION
+//#define NBENCH_EVALUATION
 
 //uint64_t debug_ip = 0;
 
 #include <stdlib.h>
 #include <qemu-plugin.h>
 #include "lib/tainting.h"
-#include "lib/taint_propagation.c"
-#include "lib/shadow_memory.c"
+#include "../lib/DFSan/dfsan_interface.h"
+#include "../lib/DFSan/dfsan.h"
+#include "lib/DFSan/dfsan.c"
 #ifdef NBENCH_EVALUATION
 #include "nbench_instrument.c"
 #endif
 
+#define FLAG_REG 100 //assumes that flags are modeled via a single register with ID 100. Since we have only 92 mapped registers, value 100 is fine
 
-static void taint_cb_mov(unsigned int cpu_index, void *udata){ //use taint_cb prefix instead of SHD
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_mov");
-//    uint8_t buf_dst_val[SHD_SIZE_MAX]={0};
-//    READ_VALUE(arg->dst,buf_dst_val);
-    err = SHD_copy(arg->src,&arg->dst);
-    OUTPUT_ERROR(err,arg,"MOV");
-//    free(udata); //no need to free right away, a cb for an instance of an instruction might be called several times!
+#define get_taint(src) src.type==GLOBAL?dfsan_get_register_label(src.addr.id):dfsan_read_label((void *)src.addr.vaddr,src.size)
+#define set_taint(dst,val) \
+        if(dst.type==GLOBAL){ \
+            dfsan_set_register_label(dst.addr.id,val); \
+            dfsan_set_label(val,(void *)dst.addr.vaddr,dst.size); \
+            }
+
+static void mark_input_bytes(uint64_t *addr, int64_t ret){
+    for(int i=0;i<ret;i++){
+        char *desc = malloc(20);
+        sprintf(desc,"%d",i);
+        dfsan_label label = dfsan_create_label(desc,(void *)0);
+        dfsan_set_label(label, addr+i, 1);
+    }
+//    printf("exiting mark_input\n");
 }
 
-//static void taint_cb_STOS(unsigned int cpu_index, void *udata){ //would have been usefull if the CB after STOS would be hit which is not the case
-//    shadow_err err = 0;
-//    INIT_ARG(arg,udata);
-//    DEBUG_OUTPUT(arg,"taint_cb_STOS");
-//    uint8_t value=0;
-//    uint8_t buf_dst_val[SHD_SIZE_MAX]={0};
-//    read repetition size from the guest, the callback would be called ecx times so no need to
-//    shad_inq regECX = {.addr.id=MAP_X86_REGISTER(X86_REG_RCX),.type=GLOBAL, .size=SHD_SIZE_u32};
-//    READ_VALUE(regECX,buf_dst_val);
-//    uint32_t count = *(uint32_t *)(buf_dst_val);
-//    shad_inq regEAX = {.addr.id=MAP_X86_REGISTER(X86_REG_RAX),.type=GLOBAL, .size=SHD_SIZE_u32};
-//    g_autofree gchar *report = g_strdup_printf("\nin taint_cb_STOS, type=%d addr_src=0x%lx dst_type=%d, addr_dst=%d\n",arg->src.type,arg->src.addr.vaddr,arg->dst.type, arg->dst.addr.id);
-//    qemu_plugin_outs(report);
-//
-////    read EAX shadow and pessimistically convert it to one byte
+static void taint_cb_clear(unsigned int cpu_index, void *udata){
+    INIT_ARG(arg,udata);
+    DEBUG_OUTPUT(arg,"taint_cb_clear");
+    set_taint(arg->dst,0);
+}
 
-//    SHD_value eax_shadow = SHD_get_shadow(regEAX);
-//    err = SHD_cast(&eax_shadow,sizeof(SHD_value),&value,sizeof(uint8_t));
-//    OUTPUT_ERROR(err,arg,"STOS error casting EAX taint");
-////    finally copy
-//    err = SHD_write_contiguous(arg->src.addr.vaddr, count, value);
-//    OUTPUT_ERROR(err,arg,"STOS error copy");
-//}
+static void taint_cb_clear_all(unsigned int cpu_index, void *udata){
+    INIT_ARG(arg,udata);
+    DEBUG_OUTPUT(arg,"taint_cb_clear_all");
 
+    set_taint(arg->dst,0);
+
+    if(arg->src.addr.vaddr){
+        set_taint(arg->dst,0);
+    }
+    if(arg->src2.addr.vaddr){
+        set_taint(arg->dst,0);
+    }
+    if(arg->src3.addr.vaddr){
+        set_taint(arg->dst,0);
+    }
+    if(arg->dst.addr.vaddr){
+        set_taint(arg->dst,0);
+    }
+
+}
+
+static void taint_cb_mov(unsigned int cpu_index, void *udata){ //use taint_cb prefix instead of SHD
+    INIT_ARG(arg,udata);
+    DEBUG_OUTPUT(arg,"taint_cb_mov");
+
+    dfsan_label label = arg->src.type!=IMMEDIATE? get_taint(arg->src): 0;
+    set_taint(arg->dst,label);
+
+}
+
+static void taint_cb_mov2(unsigned int cpu_index, void *udata){
+    shadow_err err = 0;
+    INIT_ARG(arg,udata);
+
+    dfsan_label label = arg->src.type!=IMMEDIATE? get_taint(arg->src): 0;
+    set_taint(arg->dst,label);
+
+    dfsan_label label2 = arg->src2.type!=IMMEDIATE? get_taint(arg->src2): 0;
+    set_taint(arg->src3,label2);
+
+    OUTPUT_ERROR(err,arg,"SYSCALL");
+}
 
 static void taint_cb_movwf(unsigned int cpu_index, void *udata){ //use taint_cb prefix instead of SHD
     shadow_err err = 0;
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_movwf");
 
-    err = SHD_copy(arg->src,&arg->dst);
+    dfsan_label label = arg->src.type!=IMMEDIATE? get_taint(arg->src): 0;
+    set_taint(arg->dst,label);
     OUTPUT_ERROR(err,arg,"MOV");
 
-    shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
-    err = SHD_copy_conservative(arg->dst,&flags);
+    shad_inq flags={.addr.id=FLAG_REG,.type=GLOBAL};
+    set_taint(flags,label);
+
     OUTPUT_ERROR(err,arg,"MOV flags propagation");
 }
 
-static void taint_cb_SETF(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_SETF");
-
-    shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
-    err = SHD_copy_conservative(arg->src,&flags);
-    OUTPUT_ERROR(err,arg,"FLAG propagation");
-}
-
-static void taint_cb_clear(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_clear");
-    err = SHD_clear(&arg->dst);
-    OUTPUT_ERROR(err,arg,"CLEAR");
-}
-
-static void taint_cb_ADD_SUB(unsigned int cpu_index, void *udata){
+static void taint_cb_ADD_SUB(unsigned int cpu_index, void *udata){ //support the union of up to three operands
     shadow_err err = 0;
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_ADD_SUB");
-    err = SHD_add_sub(arg->src,arg->src2,&arg->dst);
-    //handle eflags
-    shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
-    SHD_copy_conservative(arg->dst,&flags);
+
+    dfsan_label l1 = arg->src.type!=IMMEDIATE? get_taint(arg->src): 0;
+    dfsan_label l2 = arg->src2.type!=IMMEDIATE? get_taint(arg->src2): 0;
+    dfsan_label l3 = 0;
+    if(l1!=0 && l2!=0){
+        l3 = dfsan_union(l1, l2);
+    }
+    else{
+        l3 = l1 + l2; //l3 would be equal to which ever that is not zero
+    }
+    if (arg->src3.addr.vaddr!=0 && arg->src3.type!=IMMEDIATE){ //to support instructions with 4 operands
+        dfsan_label l4 = get_taint(arg->src3);
+        l3 = dfsan_union(l3, l4);
+    }
+    set_taint(arg->dst,l3);
+
     OUTPUT_ERROR(err,arg,"ADD/SUB");
 }
 
-
-static void taint_cb_ADC_SBB(unsigned int cpu_index, void *udata){
+static void taint_cb_XCHG(unsigned int cpu_index, void *udata){
     shadow_err err = 0;
     INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_ADDC_SBB");
-    shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
-    err = SHD_CAddSub(arg->src,arg->dst,flags,&arg->dst);
-    //handle eflags
-    SHD_copy_conservative(arg->dst,&flags);
-    OUTPUT_ERROR(err,arg,"ADC/SBB");
-}
+    DEBUG_OUTPUT(arg,"taint_cb_XCHG");
 
-static void taint_cb_LEA(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    int shift_val = 0;
-    DEBUG_OUTPUT(arg,"taint_cb_LEA\t*HERE*");
+    dfsan_label label1 = arg->src.type!=IMMEDIATE? get_taint(arg->src): 0;
+    dfsan_label label2 = arg->src.type!=IMMEDIATE? get_taint(arg->dst): 0;
 
-    if(arg->src3.type == IMMEDIATE && arg->src3.addr.vaddr!=0){ //shift index at src
-        shift_val = arg->src3.addr.vaddr;
-    }
-    SHD_LEA(arg->src,arg->src2,shift_val,&arg->dst);
-    OUTPUT_ERROR(err,arg,"LEA");
-}
+    set_taint(arg->src,label2);
+    set_taint(arg->dst,label1);
 
-static void taint_cb_EXTENDL(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_EXTENDL");
-    err = SHD_extensionL(arg->src,&arg->dst);
-    shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
-    SHD_copy_conservative(arg->dst,&flags);
-    OUTPUT_ERROR(err,arg,"INC/DEC");
-}
-
-static void taint_cb_CMP(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_CMP");
-    shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
-    err = SHD_CMP(arg->src,arg->dst,flags);
-    OUTPUT_ERROR(err,arg,"CMP");
-}
-
-static void taint_cb_XOR(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_XOR");
-    err = SHD_union(arg->src,&arg->dst);
-    shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
-    SHD_copy_conservative(arg->dst,&flags);
-    OUTPUT_ERROR(err,arg,"XOR");
+    OUTPUT_ERROR(err,arg,"XCHG");
 }
 
 /* A precise rule would need reading RAX and destination value before this instruction.
@@ -157,53 +145,20 @@ static void taint_cb_CMPCHG(unsigned int cpu_index, void *udata){
     shadow_err err = 0;
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_CMPCHG");
-    shad_inq regEAX = {.addr.id=MAP_X86_REGISTER(X86_REG_RAX),.type=GLOBAL, .size=arg->dst.size};
-    err = SHD_union(arg->dst,&regEAX); //if eax=dst part that we conservatively propagate
+    shad_inq regEAX = {.addr.id=MAP_X86_REGISTER(X86_REG_RAX),.type=GLOBAL};
+
+    dfsan_label l1 = get_taint(arg->dst);
+    dfsan_label l2 = get_taint(regEAX);
+    dfsan_label l3 = dfsan_union(l1, l2);
+    set_taint(arg->dst,l3); //if eax=dst part that we conservatively propagate
+
     OUTPUT_ERROR(err,arg,"CMPCHG propagate from dst to EAX");
-    err = SHD_union(arg->src,&arg->dst); //else EAX=dst that again we conservatively propagate
+
+    dfsan_label l4 = get_taint(arg->src);
+    dfsan_label l5 = dfsan_union(l4, l3);
+    set_taint(arg->dst,l5); //else src=dst that again we conservatively propagate
+
     OUTPUT_ERROR(err,arg,"CMPCHG propagate from src to dst");
-}
-
-static void taint_cb_SR(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_SR");
-    err = SHD_Shift_Rotation(arg->src,&arg->dst,arg->operation);
-    OUTPUT_ERROR(err,arg,"SHIFT/ROTATION");
-}
-
-static void taint_cb_XCHG(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_XCHG");
-    err = SHD_exchange(&arg->src,&arg->dst);
-    OUTPUT_ERROR(err,arg,"XCHG");
-}
-
-static void taint_cb_AND_OR(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_AND_OR");
-//    g_autofree gchar *report = g_strdup_printf("\nin taint_cb_AND_OR, read values src_val=%lx, dst_val=%lx\n",arg->vals->src_val,arg->vals->dst_val);
-//    qemu_plugin_outs(report);
-
-    err = SHD_and_or(arg->src,&arg->dst,(void *)&arg->vals->src_val,(void *)&arg->vals->dst_val,arg->operation);
-    shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
-    SHD_copy_conservative(arg->dst,&flags);
-    OUTPUT_ERROR(err,arg,"XCHG");
-}
-
-static void taint_cb_TEST(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_TEST");
-    uint8_t buf_src_val[SHD_SIZE_MAX]={0};
-    uint8_t buf_dst_val[SHD_SIZE_MAX]={0};
-    READ_VALUE(arg->src,buf_src_val);
-    READ_VALUE(arg->dst,buf_dst_val);
-    shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
-    err = SHD_test(arg->src,arg->dst,flags,buf_src_val,buf_dst_val);
-    OUTPUT_ERROR(err,arg,"TEST");
 }
 
 static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
@@ -211,39 +166,21 @@ static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_MUL_DIV");
     arg->dst.type = GLOBAL;
-    switch(arg->src.size){
-        case SHD_SIZE_u8:
-            arg->dst.addr.id = MAP_X86_REGISTER(X86_REG_AX);
-            arg->dst.size = SHD_SIZE_u16;
-            break;
-        case SHD_SIZE_u16:
-            arg->dst.addr.id = MAP_X86_REGISTER(X86_REG_AX);
-            arg->dst.size = SHD_SIZE_u16;
-            err = SHD_add_sub(arg->src,arg->dst,&arg->dst);
-            OUTPUT_ERROR(err,arg,"Mul");
-            arg->dst.addr.id = MAP_X86_REGISTER(X86_REG_DX);
-            break;
-        case SHD_SIZE_u32:
-            arg->dst.addr.id = MAP_X86_REGISTER(X86_REG_EAX);
-            arg->dst.size = SHD_SIZE_u32;
-            err = SHD_add_sub(arg->src,arg->dst,&arg->dst);
-            OUTPUT_ERROR(err,arg,"Mul");
-            arg->dst.addr.id = MAP_X86_REGISTER(X86_REG_EDX);
-            break;
-        case SHD_SIZE_u64:
-            arg->dst.addr.id = MAP_X86_REGISTER(X86_REG_RAX);
-            arg->dst.size = SHD_SIZE_u64;
-            err = SHD_add_sub(arg->src,arg->dst,&arg->dst);
-            OUTPUT_ERROR(err,arg,"Mul");
-            arg->dst.addr.id = MAP_X86_REGISTER(X86_REG_RDX);
-            break;
-        default:
-            assert(0);
-    }
-    err = SHD_add_sub(arg->src,arg->dst,&arg->dst);//the first propagation for 1 byte case, and the 2nd otherwise.
+    arg->dst.addr.id = arg->src2.addr.id;
 
-    shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
-    SHD_copy_conservative(arg->dst,&flags);
+    dfsan_label l1 = get_taint(arg->src);
+    dfsan_label l2 = get_taint(arg->src2); //eax
+    dfsan_label l3 = dfsan_union(l1, l2);
+    set_taint(arg->dst,l3); // eax part of mul/div
+
+    arg->dst.addr.id = arg->src3.addr.id;
+
+    dfsan_label l4 = get_taint(arg->src3); //edx
+    dfsan_label l5 = dfsan_union(l1, l4);
+    set_taint(arg->dst,l5); // edx part of mul/div
+
+    shad_inq flags={.addr.id=FLAG_REG,.type=GLOBAL};
+    set_taint(flags,l5);
 
     OUTPUT_ERROR(err,arg,"Mul");
 }
@@ -253,15 +190,16 @@ static void taint_cb_JUMP(unsigned int cpu_index, void *udata) {
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_JUMP");
     arg->src.type = MEMORY;
-    SHD_value jmp_addr = SHD_get_shadow(arg->src);
+    dfsan_label jmp_addr = get_taint(arg->src);
     jmp_addr!=0?(err=1):(err=0);
     OUTPUT_ERROR(err,arg,"JUMP *** address 0x%lx is tainted ***");
     if(arg->operation==COND_JMP){
-        shad_inq flags={.addr.id=0,.type=FLAG,.size=SHD_SIZE_u8};
-        SHD_value flags_shadow = SHD_get_shadow(flags);
+        shad_inq flags={.addr.id=FLAG_REG,.type=GLOBAL};
+        dfsan_label flags_shadow = get_taint(flags);
         OUTPUT_ERROR(flags_shadow!=0,arg,"JUMP *** flags are tainted ***");
     }
 }
+
 static void taint_cb_CALL(unsigned int cpu_index, void *udata) {
     shadow_err err = 0;
     INIT_ARG(arg,udata);
@@ -269,12 +207,13 @@ static void taint_cb_CALL(unsigned int cpu_index, void *udata) {
     DEBUG_OUTPUT(arg,"taint_cb_CALL");
     READ_VALUE(arg->dst, &arg->dst.addr.vaddr); //we need the value of stack register, we use the value as a memory address to store the eip taint
     arg->dst.type = MEMORY;
-    err = SHD_copy(arg->src2,&arg->dst);
 
-    OUTPUT_ERROR(err,arg,"CALL error storing the eip taint");
+    dfsan_label l1 = get_taint(arg->src2); //eip
+    set_taint(arg->dst,l1);
+
     //check the destination address
     arg->src.type = MEMORY;
-    SHD_value jmp_addr = SHD_get_shadow(arg->src);
+    dfsan_label jmp_addr = get_taint(arg->src);
     jmp_addr!=0?(err=1):(err=0);
     OUTPUT_ERROR(err,arg,"CALL *** destination function address is tainted ***");
 //    printf("leaving taint_cb_CALL\n");
@@ -287,121 +226,41 @@ static void taint_cb_RET(unsigned int cpu_index, void *udata) { //reverse of CAL
 
     READ_VALUE(arg->src, &arg->src.addr.vaddr);
     arg->src.type = MEMORY;
-    err = SHD_copy(arg->src,&arg->dst);
-    OUTPUT_ERROR(err,arg,"RET error storing the stack taint");
+
+    dfsan_label l1 = get_taint(arg->src); //eip
+    set_taint(arg->dst,l1);
+
     //check the destination address
-    SHD_value jmp_addr = SHD_get_shadow(arg->dst);
+    dfsan_label jmp_addr = get_taint(arg->dst);
     jmp_addr!=0?(err=1):(err=0);
     OUTPUT_ERROR(err,arg,"RET *** destination function address is tainted ***");
 }
 
-static void taint_cb_CPUID(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_CPUID");
-    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RAX);
-    arg->src.type=GLOBAL;
-    arg->src.size=SHD_SIZE_u64;
-    err = SHD_clear(&arg->src);
-    OUTPUT_ERROR(err,arg,"CPUID error clearing RAX");
-
-    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RBX);
-    err = SHD_clear(&arg->src);
-    OUTPUT_ERROR(err,arg,"CPUID error clearing RBX");
-
-    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RCX);
-    err = SHD_clear(&arg->src);
-    OUTPUT_ERROR(err,arg,"CPUID error clearing RCX");
-
-    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RDX);
-    err = SHD_clear(&arg->src);
-    OUTPUT_ERROR(err,arg,"CPUID error clearing RDX");
-}
-
-static void taint_cb_RDTSC(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_RDTSC");
-    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RAX);
-    arg->src.type=GLOBAL;
-    arg->src.size=SHD_SIZE_u64;
-    err = SHD_clear(&arg->src);
-    OUTPUT_ERROR(err,arg,"RDTSC error clearing RAX");
-
-    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RDX);
-    err = SHD_clear(&arg->src);
-    OUTPUT_ERROR(err,arg,"RDTSC error clearing RDX");
-}
-
 static void taint_cb_LEAVE(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
     INIT_ARG(arg,udata);
-
-    arg->src2.addr.id=MAP_X86_REGISTER(X86_REG_RBP);
-    arg->src2.type=GLOBAL;
-    arg->src2.size=SHD_SIZE_u64;
-
-    arg->dst.addr.id=MAP_X86_REGISTER(X86_REG_RSP);
-    arg->dst.type=GLOBAL;
-    arg->dst.size=SHD_SIZE_u64;
 
     DEBUG_OUTPUT(arg,"taint_cb_LEAVE");
-//    g_autofree gchar *report = g_strdup_printf("\nin taint_cb_LEAVE, mem_addr=0x%lx\n",arg->src.addr.vaddr);
-//    qemu_plugin_outs(report);
-    err = SHD_copy(arg->src2,&arg->dst);
-    OUTPUT_ERROR(err,arg,"LEAVE error copying RBP shadow to RSP");
-    err = SHD_copy(arg->src,&arg->src2);
-    OUTPUT_ERROR(err,arg,"LEAVE error copying MEM shadow to RBP");
-}
-static void taint_cb_SYSCALL(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RCX);
-    arg->src.type=GLOBAL;
-    arg->src.size=SHD_SIZE_u64;
-    arg->dst.addr.id=MAP_X86_REGISTER(X86_REG_RSP);
-    arg->dst.type=GLOBAL;
-    arg->dst.size=SHD_SIZE_u64;
-    DEBUG_OUTPUT(arg,"taint_cb_SYSCALL");
-    err = SHD_copy(arg->src,&arg->dst);
 
-    arg->src.addr.id=MAP_X86_REGISTER(X86_REG_RDX);
-    arg->dst.addr.id=MAP_X86_REGISTER(X86_REG_RIP);
-    err = SHD_copy(arg->src,&arg->dst);
+    dfsan_label l1 = get_taint(arg->src2); //RBP to RSP
+    set_taint(arg->dst,l1);
 
-    OUTPUT_ERROR(err,arg,"SYSCALL");
-}
+    dfsan_label l2 = get_taint(arg->src); //MEM shadow to RBP
+    set_taint(arg->src2,l2);
 
-static void taint_cb_conservative(unsigned int cpu_index, void *udata){
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_conservative");
-
-    err = SHD_copy_conservative(arg->src,&arg->dst);
-    OUTPUT_ERROR(err,arg,"Conservative copy");
-}
-
-static void print_shadow(gpointer key, gpointer value){
-    SHD_value shadow = *(SHD_value *)value;
-    uint64_t id = *(uint64_t *)key;
-    g_string_append_printf(report,"0x%lx -> 0x%lx!\n",id,shadow);
 }
 
 static void taint_list_all(void){
     report = g_string_new("------Listing register shadows------\n");
-    SHD_list_global(print_shadow);
+    //memory regs
     g_string_append_printf(report,"----------------------------------\n");
 
     g_string_append_printf(report,"------Listing memory shadows------\n");
-    SHD_list_mem(print_shadow);
-    g_string_append_printf(report,"----------------------------------\n");
-
-    g_string_append_printf(report,"-------Listing temp shadows-------\n");
-    SHD_list_temp(print_shadow);
+    //memory addrs
     g_string_append_printf(report,"----------------------------------\n");
 
     qemu_plugin_outs(report->str);
 }
+
 #ifdef CONFIG_2nd_CCACHE
 static void vcpu_tb_exec(unsigned int cpu_index, void *udata)
 {

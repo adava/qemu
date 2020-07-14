@@ -19,7 +19,7 @@ typedef struct{
     shad_inq dst;
     instruction_operation operation;
     shad_inq src2;
-    shad_inq src3; //When effective address calculation is needed e.g. LEA
+    shad_inq src3; //When effective address calculation is needed e.g. LEA, or as a placeholder for an additional source/destination
     inst_callback_values *vals;
 } inst_callback_argument;
 
@@ -68,7 +68,7 @@ g_autofree gchar *o2 = g_strdup_printf("SHADOW error in %s inst callback#\topera
 qemu_plugin_outs(o2);}
 
 #else
-#define DEBUG_OUTPUT(arg, inst_s) //if(debug_ip==0x402930) printf("%s\n",inst_s);
+#define DEBUG_OUTPUT(arg, inst_s) //printf("%s\n",inst_s);
 #define OUTPUT_ERROR(err, arg, inst_s) if (err){\
 ;}
 #endif
@@ -121,6 +121,7 @@ static inline void nice_print(cs_insn *insn)
 //            print_id_groups(insn);
 //            break;
         default:
+//            printf("INS_LOG id=%d\n",insn->id);
             break;
     }
 

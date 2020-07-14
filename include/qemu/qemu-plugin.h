@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 #define CONFIG_TAINT_ANALYSIS //sina: activates configurations for the plugins since they will be compiled separately
-#define CONFIG_2nd_CCACHE
+//#define CONFIG_2nd_CCACHE
 //#define CONFIG_DEBUG_CCACHE_SWITCH
 
 #ifndef QEMU_PLUGIN_API_H
