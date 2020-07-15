@@ -26,7 +26,7 @@ void *shadow_start=(void *)0x0000010000;
 static const uint64_t kShadowAddr = 0x10000;
 static const uint64_t kUnionTableAddr = 0x200000000000;
 static const uint64_t kAppAddr = 0x700000008000;
-static const uint64_t kShadowMask = ~0x700000000000;
+static const uint64_t kShadowMask = (0x100000000000-1);
 
 static uint64_t kShadowSize     ;
 static uint64_t kUnionTableSize ;

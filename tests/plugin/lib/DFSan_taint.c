@@ -189,8 +189,11 @@ static void taint_cb_JUMP(unsigned int cpu_index, void *udata) {
     shadow_err err = 0;
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_JUMP");
-    arg->src.type = MEMORY;
-    dfsan_label jmp_addr = get_taint(arg->src);
+
+    dfsan_label jmp_addr = 0;
+    if(arg->src.type != IMMEDIATE){
+        jmp_addr = get_taint(arg->src);
+    }
     jmp_addr!=0?(err=1):(err=0);
     OUTPUT_ERROR(err,arg,"JUMP *** address 0x%lx is tainted ***");
     if(arg->operation==COND_JMP){
@@ -198,6 +201,7 @@ static void taint_cb_JUMP(unsigned int cpu_index, void *udata) {
         dfsan_label flags_shadow = get_taint(flags);
         OUTPUT_ERROR(flags_shadow!=0,arg,"JUMP *** flags are tainted ***");
     }
+//    printf("finished JUMP CB\n");
 }
 
 static void taint_cb_CALL(unsigned int cpu_index, void *udata) {
@@ -212,8 +216,11 @@ static void taint_cb_CALL(unsigned int cpu_index, void *udata) {
     set_taint(arg->dst,l1);
 
     //check the destination address
-    arg->src.type = MEMORY;
-    dfsan_label jmp_addr = get_taint(arg->src);
+    dfsan_label jmp_addr = 0;
+
+    if(arg->src.type != IMMEDIATE){
+        jmp_addr = get_taint(arg->src);
+    }
     jmp_addr!=0?(err=1):(err=0);
     OUTPUT_ERROR(err,arg,"CALL *** destination function address is tainted ***");
 //    printf("leaving taint_cb_CALL\n");
@@ -226,13 +233,12 @@ static void taint_cb_RET(unsigned int cpu_index, void *udata) { //reverse of CAL
 
     READ_VALUE(arg->src, &arg->src.addr.vaddr);
     arg->src.type = MEMORY;
+    dfsan_label l1 = get_taint(arg->src); //esp
 
-    dfsan_label l1 = get_taint(arg->src); //eip
-    set_taint(arg->dst,l1);
+    set_taint(arg->dst,l1); //eip
 
     //check the destination address
-    dfsan_label jmp_addr = get_taint(arg->dst);
-    jmp_addr!=0?(err=1):(err=0);
+    l1!=0?(err=1):(err=0);
     OUTPUT_ERROR(err,arg,"RET *** destination function address is tainted ***");
 }
 
