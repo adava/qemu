@@ -121,8 +121,6 @@ typedef atomic_dfsan_label dfsan_union_table_t[kNumLabels][kNumLabels];
 // | reserved by kernel |
 // +--------------------+ 0x0000000000
 
-void *shadow_start=(void *)0x0000010000;
-
 static uint64_t UnusedAddr(void);
 static atomic_dfsan_label *union_table(dfsan_label l1, dfsan_label l2);
 static void dfsan_check_label(dfsan_label label);
@@ -386,7 +384,11 @@ static void dfsan_init(void){
 //    }
 //    printf("rlimit=0x%lx\n",rlim.rlim_max);
 
-    if (!MmapFixedNoReserve(ShadowAddr(), UnusedAddr() - ShadowAddr(),"shadow")) //0x1ffff0000 is the largest size I could try with fixed_addr
+    kShadowSize = kUnionTableAddr - kShadowAddr;
+    kUnionTableSize = sizeof(dfsan_union_table_t);
+    kAllocationSize = kUnionTableSize + kShadowSize;
+
+    if (!MmapFixedNoReserve(ShadowAddr(), kAllocationSize,"shadow")) //0x1ffff0000 is the largest size I could try with fixed_addr
             assert(0);
   // Protect the region of memory we don't use, to preserve the one-to-one
   // mapping from application to shadow memory. But if ASLR is disabled, Linux

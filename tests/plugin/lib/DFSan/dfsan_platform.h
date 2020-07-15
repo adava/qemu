@@ -21,10 +21,17 @@ typedef enum MappingType {
     MAPPING_SHADOW_MASK
 } MappingType;
 
+void *shadow_start=(void *)0x0000010000;
+
 static const uint64_t kShadowAddr = 0x10000;
 static const uint64_t kUnionTableAddr = 0x200000000000;
 static const uint64_t kAppAddr = 0x700000008000;
 static const uint64_t kShadowMask = ~0x700000000000;
+
+static uint64_t kShadowSize     ;
+static uint64_t kUnionTableSize ;
+static uint64_t kAllocationSize ;
+
 
 uint64_t MappingImpl(MappingType Type);
 uint64_t ShadowAddr(void);
@@ -48,7 +55,7 @@ inline uint64_t ShadowAddr(void) {
 }
 
 inline uint64_t UnionTableAddr(void) {
-    return MappingImpl(MAPPING_UNION_TABLE_ADDR);
+    return (uint64_t)shadow_start + kShadowSize;
 }
 
 inline uint64_t AppAddr(void) {
