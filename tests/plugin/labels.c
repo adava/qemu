@@ -134,8 +134,8 @@ static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
         DEBUG_MEMCB_OUTPUT(arg->addr);
 #ifdef CONFIG_2nd_CCACHE
         shad_inq inq = {.addr.vaddr=vaddr,.type=MEMORY,.size=SHD_SIZE_u64};
-        SHD_value shd=SHD_get_shadow(inq);
-        if(shd && second_ccache_flag==CHECK){
+        dfsan_label label=get_taint(inq);
+        if(label && second_ccache_flag==CHECK){
 #ifdef CONFIG_DEBUG_CCACHE_SWITCH
             printf("switching in op_mem\n");
 #endif

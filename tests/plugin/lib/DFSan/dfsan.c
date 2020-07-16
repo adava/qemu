@@ -337,6 +337,19 @@ size_t dfsan_get_label_count(void){
   return (size_t)__dfsan_last_label;
 }
 
+shadow_err check_registers(uint64_t start, uint64_t end){
+    assert(start<=end);
+    assert(start<GLOBAL_POOL_SIZE);
+
+    for(uint64_t i=start;i<=end;i++){
+        dfsan_label label = registers_shadow[i];
+        if (label!=0){
+            return 2;
+        }
+    }
+    return 0;
+}
+
 void dfsan_dump_labels(int fd) {
   dfsan_label last_label = __dfsan_last_label;
 
@@ -351,6 +364,14 @@ void dfsan_dump_labels(int fd) {
   }
 }
 
+static void dump_shadows(void){
+    for (uint64_t l = (uint64_t)shadow_start; l < (uint64_t)shadow_start+kShadowSize; l = l+2){
+        if(*(dfsan_label *)l!=0){
+            printf("0x%lx=%x\n",l,*(dfsan_label *)l);
+        }
+    }
+}
+
 static void dfsan_fini(void) {
   if (strcmp(dump_labels_at_exit, "") != 0) {
     int fd = open(dump_labels_at_exit, O_WRONLY);
@@ -361,6 +382,7 @@ static void dfsan_fini(void) {
 
     printf("INFO: DataFlowSanitizer: dumping labels to %s\n", dump_labels_at_exit);
     dfsan_dump_labels(fd);
+    //dump_shadows();
     close(fd);
   }
 }

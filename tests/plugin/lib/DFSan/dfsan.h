@@ -28,6 +28,7 @@
 typedef uint16_t dfsan_label;
 
 dfsan_label registers_shadow[GLOBAL_POOL_SIZE];
+typedef int shadow_err;
 
 void internal_iserror(int retval, char *err);
 void UnmapOrDie(void *addr, uint64_t size);

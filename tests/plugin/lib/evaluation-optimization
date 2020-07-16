@@ -55,3 +55,18 @@ FOURIER             :          526.86  :       0.60  :       0.34
 ASSIGNMENT          :          0.8166  :       3.11  :       0.81
 IDEA                :           287.3  :       4.39  :       1.30
 HUFFMAN             :          77.528  :       2.15  :       0.69
+
+
+DFSan
+
+TEST                : Iterations/sec.  : Old Index   : New Index
+                    :                  : Pentium 90* : AMD K6/233*
+--------------------:------------------:-------------:------------
+NUMERIC SORT        :          69.375  :       1.78  :       0.58
+STRING SORT         :          4.6421  :       2.07  :       0.32
+BITFIELD            :      2.0359e+07  :       3.49  :       0.73
+FP EMULATION        :          13.045  :       6.26  :       1.44
+FOURIER             :          581.38  :       0.66  :       0.37
+ASSIGNMENT          :          7.5099  :      28.58  :       7.41
+IDEA                :          473.16  :       7.24  :       2.15
+HUFFMAN             :          160.95  :       4.46  :       1.43
