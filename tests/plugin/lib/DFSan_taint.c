@@ -15,6 +15,7 @@
 #include "../lib/DFSan/dfsan_interface.h"
 #include "../lib/DFSan/dfsan.h"
 #include "lib/DFSan/dfsan.c"
+
 #ifdef NBENCH_EVALUATION
 #include "nbench_instrument.c"
 #endif
@@ -28,15 +29,6 @@
             dfsan_set_label(val,(void *)dst.addr.vaddr,dst.size); \
             }
 
-static void mark_input_bytes(uint64_t *addr, int64_t ret){
-    for(int i=0;i<ret;i++){
-        char *desc = malloc(20);
-        sprintf(desc,"%d",i);
-        dfsan_label label = dfsan_create_label(desc,(void *)0);
-        dfsan_set_label(label, addr+i, 1);
-    }
-//    printf("exiting mark_input\n");
-}
 
 static void taint_cb_clear(unsigned int cpu_index, void *udata){
     INIT_ARG(arg,udata);

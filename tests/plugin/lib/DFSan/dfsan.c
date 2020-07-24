@@ -54,73 +54,6 @@ typedef atomic_dfsan_label dfsan_union_table_t[kNumLabels][kNumLabels];
 // account for the double byte representation of shadow labels and move the //each shadow address would store a 16 bit ID, hence double byte representation
 // address into the shadow memory range.  See the function shadow_for below.
 
-// On Linux/MIPS64, memory is laid out as follows:
-// +--------------------+ 0x10000000000 (top of memory)
-// | application memory |
-// +--------------------+ 0xF000008000 (kAppAddr)
-// |                    |
-// |       unused       |
-// |                    |
-// +--------------------+ 0x2200000000 (kUnusedAddr)
-// |    union table     |
-// +--------------------+ 0x2000000000 (kUnionTableAddr)
-// |   shadow memory    |
-// +--------------------+ 0x0000010000 (kShadowAddr)
-// | reserved by kernel |
-// +--------------------+ 0x0000000000
-
-// On Linux/AArch64 (39-bit VMA), memory is laid out as follow:
-//
-// +--------------------+ 0x8000000000 (top of memory)
-// | application memory |
-// +--------------------+ 0x7000008000 (kAppAddr)
-// |                    |
-// |       unused       |
-// |                    |
-// +--------------------+ 0x1200000000 (kUnusedAddr)
-// |    union table     |
-// +--------------------+ 0x1000000000 (kUnionTableAddr)
-// |   shadow memory    |
-// +--------------------+ 0x0000010000 (kShadowAddr)
-// | reserved by kernel |
-// +--------------------+ 0x0000000000
-
-// On Linux/AArch64 (42-bit VMA), memory is laid out as follow:
-//
-// +--------------------+ 0x40000000000 (top of memory)
-// | application memory |
-// +--------------------+ 0x3ff00008000 (kAppAddr)
-// |                    |
-// |       unused       |
-// |                    |
-// +--------------------+ 0x1200000000 (kUnusedAddr)
-// |    union table     |
-// +--------------------+ 0x8000000000 (kUnionTableAddr)
-// |   shadow memory    |
-// +--------------------+ 0x0000010000 (kShadowAddr)
-// | reserved by kernel |
-// +--------------------+ 0x0000000000
-
-// On Linux/AArch64 (48-bit VMA), memory is laid out as follow:
-//
-// +--------------------+ 0x1000000000000 (top of memory)
-// | application memory |
-// +--------------------+ 0xffff00008000 (kAppAddr)
-// |       unused       |
-// +--------------------+ 0xaaaab0000000 (top of PIE address)
-// | application PIE    |
-// +--------------------+ 0xaaaaa0000000 (top of PIE address)
-// |                    |
-// |       unused       |
-// |                    |
-// +--------------------+ 0x1200000000 (kUnusedAddr)
-// |    union table     |
-// +--------------------+ 0x8000000000 (kUnionTableAddr)
-// |   shadow memory    |
-// +--------------------+ 0x0000010000 (kShadowAddr)
-// | reserved by kernel |
-// +--------------------+ 0x0000000000
-
 static uint64_t UnusedAddr(void);
 static atomic_dfsan_label *union_table(dfsan_label l1, dfsan_label l2);
 static void dfsan_check_label(dfsan_label label);
@@ -206,7 +139,7 @@ static atomic_dfsan_label *union_table(dfsan_label l1, dfsan_label l2) {
 // Checks we do not run out of labels.
 static void dfsan_check_label(dfsan_label label) {
   if (label == kInitializingLabel) {
-    printf("FATAL: DataFlowSanitizer: out of labels\n");
+    printf("FATAL: DataFlowSanitizer: out of labels, %d\n",label);
     assert(0);
   }
 }
@@ -348,6 +281,16 @@ shadow_err check_registers(uint64_t start, uint64_t end){
         }
     }
     return 0;
+}
+
+static void mark_input_bytes(uint64_t *addr, int64_t ret, uint8_t value){
+    char *desc = malloc(20);
+    sprintf(desc,"%d",value);
+    dfsan_label label = dfsan_create_label(desc,(void *)0);
+    for(int i=0;i<ret;i++){
+        dfsan_set_label(label, addr+i, 1);
+    }
+//    printf("exiting mark_input\n");
 }
 
 void dfsan_dump_labels(int fd) {

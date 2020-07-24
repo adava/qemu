@@ -1,0 +1,13 @@
+To compile:
+
+    g++ -fPIC -shared -std=gnu++11 -o union_util.o union_util.cc
+
+    g++ -fPIC -shared -std=gnu++11 -o taint_allocator.o taint_allocator.cc
+
+    g++ -fPIC -shared -std=gnu++11 -o union_hashtable.o union_hashtable.cc
+
+    g++ -pie -fPIE -fPIC -shared -std=gnu++11 -o dfsan.o dfsan.cc
+
+To use, add "#include "../lib/SE/dfsan_interface.h"", and compile the target with:
+
+    gcc -o dfsan_SE.o ../../tests/SE_tests.c ./dfsan.o ./taint_allocator.o ./union_util.o ./union_hashtable.o

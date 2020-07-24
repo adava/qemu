@@ -236,7 +236,7 @@ static void syscall_ret_callback(qemu_plugin_id_t id, unsigned int vcpu_idx, int
         uint64_t *addr = g_hash_table_lookup(syscall_rets, (gpointer)num);
         if(addr!=NULL){
             //create a label per byte
-            mark_input_bytes((void *)*addr, ret);
+            mark_input_bytes((void *)*addr, ret, 0xff);
             int removed = g_hash_table_remove(syscall_rets, (gpointer)num);
             g_assert(removed);
             g_string_append_printf(out,"\t addr=0x%"PRIx64"\tret=%"PRIu64" is done.\n",*addr,ret);

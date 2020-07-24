@@ -2,6 +2,9 @@
 // Created by sina on 2020-06-29.
 //
 
+#ifdef DFSAN_H
+#define SHD_write_contiguous(mem_addr, mem_size, value) mark_input_bytes((void *)mem_addr, mem_size, value)
+#endif
 
 #define LoadNumArrayWithRand_exit_bb 0x406E99
 #define sort_array_reg MAP_X86_REGISTER(X86_REG_R12) //the first function argument at rdi is copied to r12

@@ -38,7 +38,7 @@ static bool MmapFixed(uint64_t fixed_addr, uint64_t size, int additional_flags, 
 bool MmapFixedNoReserve(uint64_t fixed_addr, uint64_t size, const char *name);
 void *MmapFixedNoAccess(uint64_t fixed_addr, uint64_t size, const char *name);
 static inline dfsan_label *shadow_for(const void *ptr);
-
+static void mark_input_bytes(uint64_t *addr, int64_t ret, uint8_t value);
 void internal_iserror(int retval, char *err) {
     if (retval < 0) {
         if (errno)

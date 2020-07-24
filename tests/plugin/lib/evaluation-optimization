@@ -58,6 +58,7 @@ HUFFMAN             :          77.528  :       2.15  :       0.69
 
 
 DFSan
+------
 
 TEST                : Iterations/sec.  : Old Index   : New Index
                     :                  : Pentium 90* : AMD K6/233*
@@ -70,3 +71,24 @@ FOURIER             :          581.38  :       0.66  :       0.37
 ASSIGNMENT          :          7.5099  :      28.58  :       7.41
 IDEA                :          473.16  :       7.24  :       2.15
 HUFFMAN             :          160.95  :       4.46  :       1.43
+
+Full tainted
+
+TEST                : Iterations/sec.  : Old Index   : New Index
+                    :                  : Pentium 90* : AMD K6/233*
+--------------------:------------------:-------------:------------
+NUMERIC SORT        :          46.335  :       1.19  :       0.39
+
+
+Non-Optimized
+TEST                : Iterations/sec.  : Old Index   : New Index
+                    :                  : Pentium 90* : AMD K6/233*
+--------------------:------------------:-------------:------------
+NUMERIC SORT        :          16.213  :       0.42  :       0.14
+STRING SORT         :           1.207  :       0.54  :       0.08
+BITFIELD            :      4.0055e+06  :       0.69  :       0.14
+FP EMULATION        :          3.3431  :       1.60  :       0.37
+FOURIER             :          242.45  :       0.28  :       0.15
+ASSIGNMENT          :         0.50485  :       1.92  :       0.50
+IDEA                :          55.994  :       0.86  :       0.25
+HUFFMAN             :          35.389  :       0.98  :       0.31
