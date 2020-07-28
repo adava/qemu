@@ -92,7 +92,7 @@ static u32 __current_index = 0;
 // To derive a shadow memory address from an application memory address,
 // bits 44-46 are cleared to bring the address into the range    //44-46 are fixed for all app addressed (representing 7 and then 8 is next addr)
 // [0x000000008000,0x100000000000).  Then the address is shifted left by 2 to
-// account for the 4 bytes representation of shadow labels and move the //each shadow address would store a 16 bit ID, hence double byte representation
+// account for the 4 bytes representation of shadow labels and move the //each shadow address would store a 32 bit ID, hence 4 byte representation
 // address into the shadow memory range.  See the function shadow_for below.
 
 #ifdef DFSAN_RUNTIME_VMA
@@ -159,6 +159,11 @@ static inline bool is_kind_of_label(dfsan_label label, u16 kind) {
 static bool isZeroOrPowerOfTwo(uint16_t x) { return (x & (x - 1)) == 0; }
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
+const dfsan_label * dfsan_shadow_for(const void * addr){
+    return shadow_for(addr);
+}
+
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 dfsan_label __taint_union(dfsan_label l1, dfsan_label l2, u16 op, u16 size,
                           u64 op1, u64 op2) {
   if (l1 > l2 && is_commutative(op)) {
@@ -206,7 +211,7 @@ dfsan_label __taint_union(dfsan_label l1, dfsan_label l2, u16 op, u16 size,
 }
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
-dfsan_label __taint_union_load(const dfsan_label *ls, uptr n) {
+dfsan_label __taint_union_load(const void *addr,const dfsan_label *ls, uptr n) {
   dfsan_label label0 = ls[0];
   if (label0 == kInitializingLabel) return kInitializingLabel;
 
@@ -227,7 +232,6 @@ dfsan_label __taint_union_load(const dfsan_label *ls, uptr n) {
     if (constant) return CONST_LABEL;
   }
   AOUT("label0 = %d, n = %d, ls = %p\n", label0, n, ls);
-
   // shape
   bool shape = true;
   uptr shape_ext = 0;
@@ -259,7 +263,8 @@ dfsan_label __taint_union_load(const dfsan_label *ls, uptr n) {
     }
     if (shape_ext) {
       for (uptr i = 0; i < shape_ext; ++i) {
-        char *c = (char *)app_for(&ls[load_size + i]);  //sina: we should make sure app_for() would take us to the guest memory from the shadow address; with the current mapping flaw, this is not possible (collision)
+//        char *c = (char *)app_for(&ls[load_size + i]);  //sina: we should make sure app_for() would take us to the guest memory from the shadow address; with the current mapping flaw, this is not possible (collision)
+        char *c = (char *)(addr+load_size + i); //not sure if it works
         ret = __taint_union(ret, 0, Concat, (load_size + i + 1) * 8, 0, *c);  //sina: keeping track of the constants, and storing them
       }
     }
@@ -452,7 +457,7 @@ SANITIZER_INTERFACE_ATTRIBUTE dfsan_label
 dfsan_read_label(const void *addr, uptr size) {
   if (size == 0)
     return 0;
-  return __taint_union_load(shadow_for(addr), size);
+  return __taint_union_load(addr,shadow_for(addr), size);
 }
 
 SANITIZER_INTERFACE_ATTRIBUTE dfsan_label

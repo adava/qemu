@@ -20,8 +20,9 @@
 #include <sys/mman.h>
 #define GLOBAL_POOL_SIZE 254
 #include "dfsan_platform.h"
+#include "shadow_memory.h"
 #include <stdio.h>
-
+#include <inttypes.h>
 
 //#define Swap(type,a,b) \
 //{\
@@ -75,10 +76,15 @@ void dfsan_set_label(dfsan_label label, T &data) {  // NOLINT
 
 namespace __dfsan {
 
-    inline dfsan_label *shadow_for(void *ptr) { //sina: this new implementation might result in collision e.g. one address falling below the shadow memory area and one above.
-        uint64_t index = ((((uint64_t) ptr) & ShadowMask()) << 1);
-        return (dfsan_label *)((uint64_t)shadow_start + index);
+//    dfsan_label *shadow_for(void *ptr) { //sina: this new implementation might result in collision e.g. one address falling below the shadow memory area and one above.
+//        uint64_t index = ((((uint64_t) ptr) & ShadowMask()) << 1); //it should be left shift by 2 since the new dfsan_label is 4 bytes
+//        return (dfsan_label *)((uint64_t)shadow_start + index);
+//    }
+
+    dfsan_label *shadow_for(void *ptr) {
+        return (dfsan_label *)get_shadow_memory((uint64_t)ptr);
     }
+
 
     inline const dfsan_label *shadow_for(const void *ptr) {
         return shadow_for(const_cast<void *>(ptr));

@@ -6,7 +6,7 @@ To compile:
 
     g++ -fPIC -shared -std=gnu++11 -o union_hashtable.o union_hashtable.cc
 
-    g++ -pie -fPIE -fPIC -shared -std=gnu++11 -o dfsan.o dfsan.cc
+    g++ -pie -fPIE -fPIC -shared -std=gnu++11 -o dfsan.o dfsan.cc `pkg-config --cflags glib-2.0` `pkg-config --libs glib-2.0`
 
 To use, add "#include "../lib/SE/dfsan_interface.h"", and compile the target with:
 

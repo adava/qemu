@@ -1,3 +1,7 @@
+/* To compile, run:
+ * gcc shadow_aux_tests.c `pkg-config --cflags glib-2.0` `pkg-config --libs glib-2.0`
+ */
+
 
 #include <assert.h>
 #include <stdlib.h>
