@@ -57,14 +57,6 @@ typedef struct shadow_memory_struct {
     GHashTable *pages; //it’s a hashmap of shadow_pages
 } shadow_memory;
 
-enum shadow_type{
-    TEMP = 1, //so we can distinguish uninitialized inquiries
-    GLOBAL,
-    MEMORY,
-    IMMEDIATE, //used for SHIFT, this type MUST not be passed to the shadow storage
-    FLAG
-};
-
 typedef enum {
     SHD_SIZE_u8= sizeof(uint8_t),
     SHD_SIZE_u16= sizeof(uint16_t),

@@ -29,17 +29,6 @@
 // type c=a; a=b; b=c;\
 //}
 
-#if 0
-# define AOUT(...)
-#else
-# define AOUT(...)                                       \
-  do {                                                  \
-    if (1)  {                                           \
-      printf("[RT] (%s:%d) ", __FUNCTION__, __LINE__);  \
-      printf(__VA_ARGS__);                              \
-    }                                                   \
-  } while(false)
-#endif
 // Copy declarations from public sanitizer/dfsan_interface.h header here.
 typedef u32 dfsan_label;
 
@@ -49,8 +38,6 @@ typedef u32 dfsan_label;
 #ifndef PATH_MAX
 # define PATH_MAX 4096
 #endif
-#define CONST_OFFSET 1
-#define CONST_LABEL 0
 
 typedef int shadow_err;
 
@@ -59,13 +46,14 @@ void dfsan_add_label(dfsan_label label, u8 op, void *addr, uptr size);
 void dfsan_set_label(dfsan_label label, void *addr, uptr size);
 dfsan_label dfsan_read_label(const void *addr, uptr size);
 void dfsan_store_label(dfsan_label l1, void *addr, uptr size);
-dfsan_label dfsan_union(dfsan_label l1, dfsan_label l2, u16 op, u8 size,
-                        u64 op1, u64 op2);
+dfsan_label dfsan_union(dfsan_label l1, dfsan_label l2, u16 op, u8 size, u64 op1, u64 op2, u8 op1_type, u8 op2_type, u64 dest, u8 dest_type);
 dfsan_label dfsan_create_label(off_t offset);
 dfsan_label dfsan_get_label(const void *addr);
 
 // taint source
 static void mark_input_bytes(uint64_t *addr, int64_t ret, uint8_t value);
+
+void dfsan_fini(void);
 
 }  // extern "C"
 
@@ -94,14 +82,15 @@ namespace __dfsan {
         return (void *) ((((uptr) l) >> 2) | AppBaseAddr());
     }
 
-    static inline bool is_commutative(unsigned char op) {
-        switch(op) {
+    static inline bool is_commutative(u16 op) { //sina: not very meaningful in the binary analysis context; Add EAX, ECX is not equivalent to ADD ECX, EAX because their destinations are different.
+        switch(op) {                                      //but since we separately store the destination, it wouldn't harm to reorder the sources.
             case Not:
             case And:
             case Or:
             case Xor:
             case Add:
             case Mul:
+            case Adc:
                 return true;
             default:
                 return false;

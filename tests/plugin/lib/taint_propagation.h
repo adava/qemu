@@ -1,7 +1,6 @@
 //
 // Created by sina on 4/20/2020.
 //
-#include "shadow_memory.h"
 
 #ifndef TAINT_PROPAGATION_H
 #define TAINT_PROPAGATION_H
@@ -18,17 +17,6 @@
 #define RULE_IMPROVE_AND(a,b) RULE_UNION(a,b)
 #define RULE_IMPROVE_OR(a,b) RULE_UNION(~a,b) //a is the Value, and be is the shadow!
 #define RULE_AND_OR(op1_v, sh_src, op2_v, sh_dst, improve_op) RULE_INTERSECT(RULE_UNION(sh_src, sh_dst),RULE_INTERSECT(improve_op(op1_v, sh_src), improve_op(op2_v, sh_dst)))
-typedef enum{
-    Shl,
-    Shr,
-    Sar,
-    Sal,
-    Rol,
-    Ror,
-    OP_AND,
-    OP_OR,
-    COND_JMP
-} instruction_operation;
 
 typedef instruction_operation shift_op;
 typedef instruction_operation logical_op;

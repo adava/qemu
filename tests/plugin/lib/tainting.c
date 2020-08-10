@@ -11,9 +11,10 @@
 
 #include <stdlib.h>
 #include <qemu-plugin.h>
-#include "lib/tainting.h"
-#include "lib/taint_propagation.c"
 #include "lib/shadow_memory.c"
+#include "lib/tainting.h"
+#include "taint_propagation.h"
+#include "lib/taint_propagation.c"
 #ifdef NBENCH_EVALUATION
 #include "nbench_instrument.c"
 #endif

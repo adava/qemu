@@ -35,7 +35,10 @@ extern "C" {
 
 /// Computes the union of \c l1 and \c l2, possibly creating a union label in
 /// the process.
-dfsan_label dfsan_union(dfsan_label l1, dfsan_label l2, u8 op, u8 size);
+
+dfsan_label dfsan_union(dfsan_label l1, dfsan_label l2, u16 op, u8 size, u64 op1, u64 op2, u8 op1_type, u8 op2_type, u64 dest, u8 dest_type);
+
+//dfsan_label dfsan_union(dfsan_label l1, dfsan_label l2, u8 op, u8 size);
 
 /// Creates and returns a base label with the given description and user data.
 dfsan_label dfsan_create_label(int pos);
@@ -59,7 +62,7 @@ dfsan_label dfsan_get_label(long data);
 dfsan_label dfsan_read_label(const void *addr, size_t size);
 
 /// Retrieves the starting address for the shadow memory of the given address
-const dfsan_label * dfsan_shadow_for(const void * addr);
+const dfsan_label *dfsan_shadow_for(const void * addr);
 
 /// Retrieves a pointer to the dfsan_label_info struct for the given label.
 const dfsan_label_info *dfsan_get_label_info(dfsan_label label);
@@ -89,9 +92,11 @@ void dfsan_dump_labels(int fd);
 
 //static inline dfsan_label *shadow_for(const void *ptr);
 
-static void mark_input_bytes(uint64_t *addr, int64_t ret, uint8_t value);
+void mark_input_bytes(uint64_t *addr, int64_t ret, uint8_t value);
 
 void dfsan_init(void);
+
+void dfsan_fini(void);
 
 #ifdef __cplusplus
 }  // extern "C"

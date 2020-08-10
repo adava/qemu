@@ -11,6 +11,7 @@
 
 #include <stdlib.h>
 #include <qemu-plugin.h>
+#include "shadow_memory.h"
 #include "lib/tainting.h"
 #include "../lib/DFSan/dfsan_interface.h"
 #include "../lib/DFSan/dfsan.h"
@@ -40,16 +41,14 @@ static void taint_cb_clear_all(unsigned int cpu_index, void *udata){
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_clear_all");
 
-    set_taint(arg->dst,0);
-
     if(arg->src.addr.vaddr){
-        set_taint(arg->dst,0);
+        set_taint(arg->src,0);
     }
     if(arg->src2.addr.vaddr){
-        set_taint(arg->dst,0);
+        set_taint(arg->src2,0);
     }
     if(arg->src3.addr.vaddr){
-        set_taint(arg->dst,0);
+        set_taint(arg->src3,0);
     }
     if(arg->dst.addr.vaddr){
         set_taint(arg->dst,0);
@@ -140,15 +139,15 @@ static void taint_cb_CMPCHG(unsigned int cpu_index, void *udata){
     shad_inq regEAX = {.addr.id=MAP_X86_REGISTER(X86_REG_RAX),.type=GLOBAL};
 
     dfsan_label l1 = get_taint(arg->dst);
-    dfsan_label l2 = get_taint(regEAX);
-    dfsan_label l3 = dfsan_union(l1, l2);
-    set_taint(arg->dst,l3); //if eax=dst part that we conservatively propagate
+    dfsan_label l2 = get_taint(regEAX); //eax=dst (if eax!=dst) part that we conservatively propagate
+    dfsan_label l3 = dfsan_union(l1, l2); //either than branch executes that results in dst taint being loaded, or doesn't that previous eax holds
+    set_taint(regEAX,l2);
 
     OUTPUT_ERROR(err,arg,"CMPCHG propagate from dst to EAX");
 
-    dfsan_label l4 = get_taint(arg->src);
-    dfsan_label l5 = dfsan_union(l4, l3);
-    set_taint(arg->dst,l5); //else src=dst that again we conservatively propagate
+    dfsan_label l4 = get_taint(arg->src); //dst=src (if eax==dst)
+    dfsan_label l5 = dfsan_union(l4, l1); // effectively, we mean dst = dst | src that is either branch being executed.
+    set_taint(arg->dst,l5); // we conservatively propagate
 
     OUTPUT_ERROR(err,arg,"CMPCHG propagate from src to dst");
 }

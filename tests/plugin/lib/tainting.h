@@ -1,12 +1,29 @@
 //
 // Created by sina on 4/27/20.
 //
+#include "../../../capstone/include/x86.h"
+
 #include <stdint.h>
+#ifndef GLOBAL_POOL_SIZE
 #define GLOBAL_POOL_SIZE X86_REG_ENDING + 20
-#include "taint_propagation.h"
+#endif
+//#include "taint_propagation.h"
 #include "lib/utility.c"
 #ifndef TAINTING_H
 #define TAINTING_H
+
+typedef enum{
+    Shl = X86_REG_ENDING + 10, //sina: 10 just to have a safe margin
+    Shr,
+    Sar,
+    Sal,
+    Rol,
+    Ror,
+    OP_AND,
+    OP_OR,
+    COND_JMP
+} instruction_operation;
+
 
 typedef struct{
     uint64_t src_val;

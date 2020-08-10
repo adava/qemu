@@ -28,6 +28,8 @@
 #include "../lib/SE/shadow_memory.h"
 void *res;
 
+#define dfsan_union(x,y,z,w) dfsan_union(x,y,z,w,0,0,UNASSIGNED,UNASSIGNED,0,UNASSIGNED)
+
 int test_open(const char *name, uint64_t size, int *flags) {
     if (!name)
         return -1;

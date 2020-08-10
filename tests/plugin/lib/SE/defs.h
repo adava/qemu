@@ -5,8 +5,26 @@
 #ifndef _HAVE_DEFS_H
 #define _HAVE_DEFS_H
 
+#include "../../../../capstone/include/x86.h" //sina: replace with the instruction set location
 #include <stdint.h>
 #include <stdlib.h>
+
+#if 0
+# define AOUT(...)
+#else
+# define AOUT(...)                                       \
+  do {                                                  \
+    if (1)  {                                           \
+      printf("[RT] (%s:%d) ", __FUNCTION__, __LINE__);  \
+      printf(__VA_ARGS__);                              \
+    }                                                   \
+  } while(false)
+#endif
+
+#define CONST_OFFSET 1
+#define CONST_LABEL 0
+
+#define op_start_id X86_INS_ENDING + 1 //sina: change to the starting ID to avoid conflict with the ISA
 
 typedef unsigned long uptr;
 typedef uint32_t dfsan_label;
@@ -21,26 +39,44 @@ typedef signed   short s16;  // NOLINT
 typedef signed   int s32;
 typedef signed   long long s64;  // NOLINT
 
-enum operators { //sina: revise based on capstone
-    Not       = 1,
-    Neg       = 2,
-    And,
-    Or,
-    Xor,
-    Add,
-    Mul,
-    Load, /* from here after, the use is internal in the Load/Store */
+enum shadow_type{
+    UNASSIGNED = 0,
+    TEMP = 1, //so we can distinguish uninitialized inquiries
+    GLOBAL, //Register
+    GLOBAL_IMPLICIT,
+    MEMORY,
+    MEMORY_IMPLICIT, //for instance Add mem, imm
+    IMMEDIATE, //used for SHIFT, this type MUST not be passed to the shadow storage
+//    FLAG, //modeled as part of GLOBAL
+    MULTIPLE_OPS
+};
+
+enum operators { //sina: based on capstone capstone/include/x86.h, revise based on the target arch/disassembler
+    Not = X86_INS_NOT,
+    Neg = X86_INS_NEG,
+    And = X86_INS_AND,
+    Or  = X86_INS_OR,
+    Xor = X86_INS_XOR,
+    Mul = X86_INS_MUL,
+    Add = X86_INS_ADD,
+    Adc = X86_INS_ADC,
+    Load = op_start_id, /* from here after, the use is internal in the Load/Store */
     Extract, //sina: a label union with constants copied to a series of bytes
     Concat, //sina: concat of labels and others (label or constant)
     Trunc,  //sina: Truncate a label because only a portion of it will be loaded
     ZExt, //sina:? Zero Extension
+    Nop //a non-cumulative operation to model Valgrind union
 };
 
 typedef struct dfsan_label_info {
     dfsan_label l1;
     dfsan_label l2;
     u64 op1;
+    enum shadow_type op1_type;
     u64 op2;
+    enum shadow_type op2_type;
+    u64 dest;
+    enum shadow_type dest_type;
     u16 op;
     u16 size;
     u8 flags;

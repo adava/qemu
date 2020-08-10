@@ -460,7 +460,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb = taint_cb_CMPCHG;
                 nice_print(cs_ptr);
                 break;
-            case X86_INS_IMUL:
+            case X86_INS_IMUL: //TODO: the destination is RAX:RDX (based on the size similar to MUL/DIV)
             case X86_INS_IDIV:
                 if (inst_det->op_count==2){
                     copy_inq(cb_args->dst, cb_args->src2);

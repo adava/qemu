@@ -165,12 +165,12 @@ const dfsan_label * dfsan_shadow_for(const void * addr){
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 dfsan_label __taint_union(dfsan_label l1, dfsan_label l2, u16 op, u16 size,
-                          u64 op1, u64 op2) {
-  if (l1 > l2 && is_commutative(op)) {
-    // needs to swap both labels and concretes
-    Swap(l1, l2);
-    Swap(op1, op2);
-  }
+                          u64 op1, u64 op2, enum shadow_type op1_type, enum shadow_type op2_type, u64 dest, enum shadow_type dest_type) {
+//  if (l1 > l2 && is_commutative(op)) { //sina: not sure whether this should be kept; in the binary generation, we might run to some problems. Swapping also the dest might work but not sure what the implications will be in this stage!
+//    // needs to swap both labels and concretes
+//    Swap(l1, l2);
+//    Swap(op1, op2);
+//  }
   if (l1 == 0 && l2 < CONST_OFFSET /*&& op != fsize*/) return 0; //sina: no fsize at the moment
   if (l1 == kInitializingLabel || l2 == kInitializingLabel) return kInitializingLabel;
 
@@ -178,7 +178,7 @@ dfsan_label __taint_union(dfsan_label l1, dfsan_label l2, u16 op, u16 size,
   if (l2 >= CONST_OFFSET) op2 = 0;
 
   struct dfsan_label_info label_info = {
-    .l1 = l1, .l2 = l2, .op1 = op1, .op2 = op2, .op = op, .size = size,
+    .l1 = l1, .l2 = l2, .op1 = op1, .op1_type=op1_type , .op2 = op2, .op2_type = op2_type, .dest = dest, .dest_type = dest_type, .op = op, .size = size,
     .flags = 0, .tree_size = 0, .hash = 0, .expr = nullptr, .deps = nullptr};
 
   __taint::option res = __union_table.lookup(label_info);
@@ -259,13 +259,13 @@ dfsan_label __taint_union_load(const void *addr,const dfsan_label *ls, uptr n) {
 
     dfsan_label ret = label0;
     if (load_size > 1) {
-      ret = __taint_union(label0, (dfsan_label)load_size, Load, load_size * 8, 0, 0);
+      ret = __taint_union(label0, (dfsan_label)load_size, Load, load_size * 8, 0, 0, UNASSIGNED, UNASSIGNED, 0, UNASSIGNED);
     }
     if (shape_ext) {
       for (uptr i = 0; i < shape_ext; ++i) {
 //        char *c = (char *)app_for(&ls[load_size + i]);  //sina: we should make sure app_for() would take us to the guest memory from the shadow address; with the current mapping flaw, this is not possible (collision)
         char *c = (char *)(addr+load_size + i); //not sure if it works
-        ret = __taint_union(ret, 0, Concat, (load_size + i + 1) * 8, 0, *c);  //sina: keeping track of the constants, and storing them
+        ret = __taint_union(ret, 0, Concat, (load_size + i + 1) * 8, 0, *c,UNASSIGNED,IMMEDIATE,0,UNASSIGNED);  //sina: keeping track of the constants, and storing them
       }
     }
     return ret;
@@ -300,18 +300,18 @@ dfsan_label __taint_union_load(const void *addr,const dfsan_label *ls, uptr n) {
     if (!is_constant_label(next_label)) {
       if (next_size <= (n - i) * 8) {
         i += next_size / 8;
-        label = __taint_union(label, next_label, Concat, i * 8, 0, 0); //sina: this might be a problem; the operands are not set
+        label = __taint_union(label, next_label, Concat, i * 8, 0, 0, UNASSIGNED, UNASSIGNED, 0, UNASSIGNED); //sina: this might be a problem; the operands are not set
       } else {
         printf("WARNING: partial loading expected=%d has=%d\n", n-i, next_size);
         uptr size = n - i;
-        dfsan_label trunc = __taint_union(next_label, CONST_LABEL, Trunc, size * 8, 0, 0);
-        return __taint_union(label, trunc, Concat, n * 8, 0, 0);
+        dfsan_label trunc = __taint_union(next_label, CONST_LABEL, Trunc, size * 8, 0, 0, UNASSIGNED, UNASSIGNED, 0, UNASSIGNED);
+        return __taint_union(label, trunc, Concat, n * 8, 0, 0, UNASSIGNED, UNASSIGNED, 0, UNASSIGNED);
       }
     } else {
       printf("WARNING: taint mixed with concrete %d\n", i);
-      char *c = (char *)app_for(&ls[i]);
+      char *c = (char *)app_for(&ls[i]); //sina: instead of app_for, Qemu guest memory API should be called.
       ++i;
-      label = __taint_union(label, 0, Concat, i * 8, 0, *c);
+      label = __taint_union(label, 0, Concat, i * 8, 0, *c, UNASSIGNED, IMMEDIATE, 0, UNASSIGNED);
     }
   }
   AOUT("\n");
@@ -384,7 +384,7 @@ void __taint_union_store(dfsan_label l, dfsan_label *ls, uptr n) {
 
   // default fall through
   for (uptr i = 0; i < n; ++i) {
-    ls[i] = __taint_union(l, CONST_LABEL, Extract, 8, 0, i * 8); //sina: so we use extract for label and a constant; the union is between two bytes, and we would record the offset from the start in the l2
+    ls[i] = __taint_union(l, CONST_LABEL, Extract, 8, 0, i * 8, IMMEDIATE, IMMEDIATE, 0, UNASSIGNED); //sina: so we use extract for label and a constant; the union is between two bytes, and we would record the offset from the start in the l2
   }
 }
 
@@ -396,9 +396,9 @@ void dfsan_store_label(dfsan_label l, void *addr, uptr size) {
 
 // Like __dfsan_union, but for use from the client or custom functions.  Hence
 // the equality comparison is done here before calling __dfsan_union.
-SANITIZER_INTERFACE_ATTRIBUTE dfsan_label
-dfsan_union(dfsan_label l1, dfsan_label l2, u16 op, u8 size, u64 op1, u64 op2) {
-  return __taint_union(l1, l2, op, size, op1, op2);
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE
+dfsan_label dfsan_union(dfsan_label l1, dfsan_label l2, u16 op, u8 size, u64 op1, u64 op2, u8 op1_type, u8 op2_type, u64 dest, u8 dest_type) {
+  return __taint_union(l1, l2, op, size, op1, op2,(enum shadow_type)op1_type,(enum shadow_type)op2_type,dest,(enum shadow_type)dest_type);
 }
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
@@ -440,7 +440,7 @@ void dfsan_set_label(dfsan_label label, void *addr, uptr size) {
 SANITIZER_INTERFACE_ATTRIBUTE
 void dfsan_add_label(dfsan_label label, u8 op, void *addr, uptr size) {
   for (dfsan_label *labelp = shadow_for(addr); size != 0; --size, ++labelp)
-    *labelp = __taint_union(*labelp, label, op, 1, 0, 0);
+    *labelp = __taint_union(*labelp, label, op, 1, 0, 0,UNASSIGNED,UNASSIGNED,0,UNASSIGNED);
 }
 
 // Unlike the other dfsan interface functions the behavior of this function
@@ -505,7 +505,8 @@ shadow_err check_registers(uint64_t start, uint64_t end){
     return 0;
 }
 
-static void mark_input_bytes(uint64_t *addr, int64_t ret, uint8_t value){
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE void
+mark_input_bytes(uint64_t *addr, int64_t ret, uint8_t value){
 //    char *desc = malloc(20);
 //    sprintf(desc,"%d",value);
     dfsan_label label = dfsan_create_label(value);
