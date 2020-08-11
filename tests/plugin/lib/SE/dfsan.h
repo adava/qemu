@@ -24,6 +24,10 @@
 #include <stdio.h>
 #include <inttypes.h>
 
+#ifdef SANITIZER_CAN_USE_PREINIT_ARRAY //can't be used in the Qemu pluging environment
+#undef SANITIZER_CAN_USE_PREINIT_ARRAY
+#endif
+
 //#define Swap(type,a,b) \
 //{\
 // type c=a; a=b; b=c;\
@@ -50,6 +54,7 @@ dfsan_label dfsan_union(dfsan_label l1, dfsan_label l2, u16 op, u8 size, u64 op1
 dfsan_label dfsan_create_label(off_t offset);
 dfsan_label dfsan_get_label(const void *addr);
 
+void dfsan_init(void);
 // taint source
 void mark_input_bytes(void *addr, int64_t ret, uint8_t value);
 

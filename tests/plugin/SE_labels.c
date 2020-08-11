@@ -70,8 +70,6 @@ static inline inst_callback_argument *analyze_Operands(cs_x86_op *operands,int n
     memset(res,0,sizeof(inst_callback_argument));
     switch(numOps){
         case 0:
-            free(res);
-            res = NULL;
             break;
         case 1:
             analyzeOp(&res->src, operands[0]);;
@@ -112,11 +110,11 @@ static inline qemu_plugin_vcpu_udata_cb_t analyze_LEA_Addr(inst_callback_argumen
     }else{
         res->src2.type = IMMEDIATE;
     }
-    if (mem_op->scale!=1){
+//    if (mem_op->scale!=1){
         res->src3.addr.vaddr = mem_op->scale;
         res->src3.type = IMMEDIATE;
         res->src3.size = SHD_SIZE_u32;
-    }
+//    }
     return taint_cb_3ops; //TODO: better to have a separate cb and construct a union type for effective address.
 }
 
@@ -152,13 +150,14 @@ static void plugin_exit(qemu_plugin_id_t id, void *p)
     g_autofree gchar *report = g_strdup_printf("\nDEBUG output end:\n");
     qemu_plugin_outs(report);
 
-    dfsan_fini();
+    //dfsan_fini();
 
     g_autoptr(GString) end_rep = g_string_new("\n");
     print_unsupported_ins(end_rep,unsupported_ins_log);
     g_string_append_printf(end_rep, "Done\n");
     qemu_plugin_outs(end_rep->str);
 }
+
 
 static void plugin_init(void)
 {

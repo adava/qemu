@@ -555,6 +555,7 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_fini() {
   }
 }
 
+#if SANITIZER_CAN_USE_PREINIT_ARRAY
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init() {
 
     __dfsan::kShadowSize = MappingArchImpl<MAPPING_UNION_TABLE_ADDR>() - MappingArchImpl<MAPPING_SHADOW_ADDR>();
@@ -573,7 +574,7 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init() {
     // init const size
   __dfsan_label_info[CONST_LABEL].size = 8;
 
-//  MmapFixedNoReserve(HashTableAddr(), hashtable_size); //sina: not sure about this
+//    MmapFixedNoReserve(HashTableAddr(), hashtable_size); //sina: not sure about this
 
 //    printf("UnionTableAddr=%lx\n",UnionTableAddr());
 //    printf("HashTableAddr=%lx\n",HashTableAddr());
@@ -584,9 +585,23 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init() {
 
     //initialize registers' labels to zero
   memset(registers_shadow,0,GLOBAL_POOL_SIZE*sizeof(dfsan_label));
+
+  SHD_init();
 }
 
-//#if SANITIZER_CAN_USE_PREINIT_ARRAY
-//__attribute__((section(".preinit_array"), used))
-//static void (*dfsan_init_ptr)(int, char **, char **) = dfsan_init;
-//#endif
+__attribute__((section(".preinit_array"), used))
+static void (*dfsan_init_ptr)(int, char **, char **) = dfsan_init;
+
+#else
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init() {
+
+//  the memory initialization will be done in taint alloc (because of constructors execution order)
+    SHD_init();
+    __dfsan_label_info = (dfsan_label_info *)UnionTableAddr();
+
+    // init const size
+    __dfsan_label_info[CONST_LABEL].size = 8;
+
+    memset(registers_shadow,0,GLOBAL_POOL_SIZE*sizeof(dfsan_label));
+}
+#endif

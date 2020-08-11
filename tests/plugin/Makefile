@@ -23,11 +23,12 @@ SONAMES := $(addsuffix .so,$(addprefix lib,$(NAMES)))
 
 QEMU_CFLAGS += -fPIC -Wno-unused-but-set-variable -Wno-unused-function
 QEMU_CFLAGS += -I$(SRC_PATH)/include/qemu
+#QEMU_LDFLAGS += -lstdc++
 
 all: $(SONAMES)
 
 libSE_labels.so: SE_labels.o
-	$(CC) -shared -Wl,-soname,$@ -o $@ $^ $(LDLIBS) $(SRC_PATH)/tests/plugin/lib/SE/dfsan.o $(SRC_PATH)/tests/plugin/lib/SE/taint_allocator.o $(SRC_PATH)/tests/plugin/lib/SE/union_util.o $(SRC_PATH)/tests/plugin/lib/SE/union_hashtable.o
+	$(CC) -shared -Wl,-soname,$@ -o $@ $^ $(LDLIBS) $(SRC_PATH)/tests/plugin/lib/SE/dfsan.o  $(SRC_PATH)/tests/plugin/lib/SE/union_util.o $(SRC_PATH)/tests/plugin/lib/SE/union_hashtable.o $(SRC_PATH)/tests/plugin/lib/SE/taint_allocator.o
 
 lib%.so: %.o
 	$(CC) -shared -Wl,-soname,$@ -o $@ $^ $(LDLIBS)

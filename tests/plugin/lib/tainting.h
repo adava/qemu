@@ -13,7 +13,7 @@
 #define TAINTING_H
 
 typedef enum{
-    Shl = X86_REG_ENDING + 10, //sina: 10 just to have a safe margin
+    Shl = X86_INS_ENDING + 10, //sina: 10 just to have a safe margin
     Shr,
     Sar,
     Sal,

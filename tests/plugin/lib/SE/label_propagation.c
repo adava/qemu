@@ -116,7 +116,7 @@ static void taint_cb_3ops(unsigned int cpu_index, void *udata){ //TODO you might
 #define cb_debug "taint_cb_3ops"
     DEBUG_OUTPUT(arg,cb_debug);
     if(arg->src.type==UNASSIGNED || arg->src2.type==UNASSIGNED || arg->src3.type==UNASSIGNED){
-        AOUT("use taint_cb_2ops function instead!");
+        AOUT("use taint_cb_2ops function instead! OP=%d, operand1=%d, operand2=%d, operand3=%d\n",arg->operation, arg->src.type, arg->src2.type, arg->src3.type);
         assert(1);
     }
     dfsan_label l1 = (arg->src.type==IMMEDIATE)?  CONST_LABEL: get_taint(arg->src);

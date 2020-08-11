@@ -1,10 +1,10 @@
 To compile:
 
-    g++ -fPIC -shared -std=gnu++11 -o union_util.o union_util.cc
+    g++ -fPIC -shared -std=gnu++11 -o union_util.o union_util.cc `pkg-config --cflags glib-2.0` `pkg-config --libs glib-2.0`
 
-    g++ -fPIC -shared -std=gnu++11 -o taint_allocator.o taint_allocator.cc
+    g++ -fPIC -shared -std=gnu++11 -o taint_allocator.o taint_allocator.cc `pkg-config --cflags glib-2.0` `pkg-config --libs glib-2.0`;cd -
 
-    g++ -fPIC -shared -std=gnu++11 -o union_hashtable.o union_hashtable.cc
+    g++ -fPIC -shared -std=gnu++11 -o union_hashtable.o union_hashtable.cc `pkg-config --cflags glib-2.0` `pkg-config --libs glib-2.0`
 
     g++ -pie -fPIE -fPIC -shared -std=gnu++11 -o dfsan.o dfsan.cc `pkg-config --cflags glib-2.0` `pkg-config --libs glib-2.0`
 
