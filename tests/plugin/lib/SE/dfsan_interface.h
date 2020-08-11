@@ -92,7 +92,7 @@ void dfsan_dump_labels(int fd);
 
 //static inline dfsan_label *shadow_for(const void *ptr);
 
-void mark_input_bytes(uint64_t *addr, int64_t ret, uint8_t value);
+void mark_input_bytes(void *addr, int64_t ret, uint8_t value);
 
 void dfsan_init(void);
 

@@ -506,7 +506,7 @@ shadow_err check_registers(uint64_t start, uint64_t end){
 }
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE void
-mark_input_bytes(uint64_t *addr, int64_t ret, uint8_t value){
+mark_input_bytes(void *addr, int64_t ret, uint8_t value){
 //    char *desc = malloc(20);
 //    sprintf(desc,"%d",value);
     dfsan_label label = dfsan_create_label(value);

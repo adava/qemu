@@ -1,0 +1,794 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="BookmarkManager">
+    <bookmark url="file://$PROJECT_DIR$/accel/tcg/cputlb.c" line="1535" mnemonic="4" />
+  </component>
+  <component name="CMakeRunConfigurationManager" shouldGenerate="true" shouldDeleteObsolete="true">
+    <generated />
+  </component>
+  <component name="CMakeSettings">
+    <configurations>
+      <configuration PROFILE_NAME="Debug" CONFIG_NAME="Debug" />
+    </configurations>
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="8c553d01-b7ac-419d-a033-518fd77130fd" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/sample-int.asm" beforeDir="false" afterPath="$PROJECT_DIR$/sample-int.asm" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/plugin/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/tests/plugin/Makefile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/plugin/SE_labels.c" beforeDir="false" afterPath="$PROJECT_DIR$/tests/plugin/SE_labels.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/plugin/lib/DFSan_taint.c" beforeDir="false" afterPath="$PROJECT_DIR$/tests/plugin/lib/DFSan_taint.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/plugin/lib/SE/dfsan.cc" beforeDir="false" afterPath="$PROJECT_DIR$/tests/plugin/lib/SE/dfsan.cc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/plugin/lib/SE/dfsan.h" beforeDir="false" afterPath="$PROJECT_DIR$/tests/plugin/lib/SE/dfsan.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/plugin/lib/SE/dfsan_interface.h" beforeDir="false" afterPath="$PROJECT_DIR$/tests/plugin/lib/SE/dfsan_interface.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/plugin/lib/SE/label_propagation.c" beforeDir="false" afterPath="$PROJECT_DIR$/tests/plugin/lib/SE/label_propagation.c" afterDir="false" />
+    </list>
+    <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ClangdSettings">
+    <option name="formatViaClangd" value="false" />
+  </component>
+  <component name="DatabaseView">
+    <option name="SHOW_INTERMEDIATE" value="true" />
+    <option name="GROUP_DATA_SOURCES" value="true" />
+    <option name="GROUP_SCHEMA" value="true" />
+    <option name="GROUP_CONTENTS" value="false" />
+    <option name="SORT_POSITIONED" value="false" />
+    <option name="SHOW_EMPTY_GROUPS" value="false" />
+    <option name="AUTO_SCROLL_FROM_SOURCE" value="false" />
+    <option name="HIDDEN_KINDS">
+      <set />
+    </option>
+    <expand />
+    <select />
+  </component>
+  <component name="FileEditorManager">
+    <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
+      <file pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/tests/plugin/SE_labels.c">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="532">
+              <caret line="220" column="16" selection-start-line="220" selection-start-column="16" selection-end-line="220" selection-end-column="16" />
+              <folding>
+                <element signature="e#23199#23220#0" expanded="true" />
+                <element signature="e#24431#24524#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/label_propagation.c">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="2927">
+              <caret line="280" column="1" selection-start-line="280" selection-start-column="1" selection-end-line="280" selection-end-column="1" />
+              <folding>
+                <element signature="e#402#432#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/tests/plugin/tests/SE_tests.c">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="336">
+              <caret line="24" selection-start-line="24" selection-end-line="24" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/tests/plugin/Makefile">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="406">
+              <caret line="29" column="211" selection-start-line="29" selection-start-column="211" selection-end-line="29" selection-end-column="211" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/dfsan.cc">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="51">
+              <caret line="508" column="21" selection-start-line="508" selection-start-column="21" selection-end-line="508" selection-end-column="21" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/dfsan_interface.h">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="353">
+              <caret line="99" selection-start-line="99" selection-end-line="99" />
+              <folding>
+                <element signature="e#3895#4050#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/dfsan.h">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="448">
+              <caret line="53" column="26" selection-start-line="53" selection-start-column="26" selection-end-line="53" selection-end-column="26" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/defs.h">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="613">
+              <caret line="46" column="10" selection-start-line="46" selection-start-column="4" selection-end-line="46" selection-end-column="10" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/shadow_memory.h">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="336">
+              <caret line="68" column="10" selection-start-line="68" selection-start-column="10" selection-end-line="68" selection-end-column="10" />
+              <folding>
+                <element signature="e#184#466#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/tests/plugin/lib/DFSan_taint.c">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="101">
+              <caret line="195" column="75" selection-start-line="195" selection-start-column="75" selection-end-line="195" selection-end-column="75" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+    </leaf>
+  </component>
+  <component name="FindInProjectRecents">
+    <findStrings>
+      <find>tainting.h</find>
+      <find>guest_memory_read_func</find>
+      <find>operation</find>
+      <find>CM</find>
+      <find>XCHG</find>
+      <find>IMUL</find>
+      <find>MUL</find>
+      <find>taint_cb_CALL</find>
+      <find>uint8_t</find>
+      <find>taint_cb_cmovcc</find>
+      <find>analyzeOp</find>
+      <find>cs_ptr</find>
+      <find>IMPL</find>
+      <find>IMPLICIT</find>
+      <find>enum shadow_type</find>
+      <find>taint_cb_clear</find>
+      <find>taint_cb_ADD_SUB</find>
+      <find>x86_op_mem</find>
+      <find>analyze_LEA_Addr</find>
+      <find>__taint_union</find>
+      <find>DEBUG_OUTPUT</find>
+      <find>TODO</find>
+      <find>CountType</find>
+      <find>op_record_values</find>
+      <find>COUNT_INDIVIDUAL</find>
+      <find>uint32_t</find>
+      <find>plugin_init</find>
+      <find>dfsan_fini</find>
+      <find>dfsan_set_label</find>
+      <find>dfsan_create_label</find>
+    </findStrings>
+    <replaceStrings>
+      <replace>uint64_t</replace>
+      <replace>printf</replace>
+      <replace>taint_cb_2ops</replace>
+      <replace>__taint_union</replace>
+      <replace>taint_cb_3ops</replace>
+      <replace>dfsan_union</replace>
+    </replaceStrings>
+    <dirStrings>
+      <dir>$PROJECT_DIR$/tests/plugin</dir>
+    </dirStrings>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="IdeDocumentHistory">
+    <option name="CHANGED_PATHS">
+      <list>
+        <option value="$PROJECT_DIR$/accel/tcg/translate-all.c" />
+        <option value="$PROJECT_DIR$/../nbench1.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/utility.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/utility.h" />
+        <option value="$PROJECT_DIR$/linux-user/elfload.c" />
+        <option value="$PROJECT_DIR$/linux-user/signal.c" />
+        <option value="$PROJECT_DIR$/plugins/api.c" />
+        <option value="$PROJECT_DIR$/target/i386/bpt_helper.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/DFSan/dfsan.cpp" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/DFSan/dfsan_interface.h" />
+        <option value="$PROJECT_DIR$/linux-user/main.c" />
+        <option value="$PROJECT_DIR$/linux-user/i386/cpu_loop.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/tests/dfsan_tests.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/shadow_memory.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/DFSan/dfsan_platform.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/DFSan/dfsan.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/labels.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/nbench_instrument.c" />
+        <option value="$PROJECT_DIR$/include/qemu/qemu-plugin.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/evaluation-optimization" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/DFSan/taint_allocator.cc" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/DFSan/dfsan.cc" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/DFSan/sanitizer_common/sanitizer_common.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/union_hashtable.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/taint_allocator.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/dfsan_platform.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/union_util.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/sanitizer_common/sanitizer_common.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/taint_allocator.cc" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/union_hashtable.cc" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/shadow_memory.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/temp" />
+        <option value="$PROJECT_DIR$/tests/plugin/tests/shadow_aux_tests.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/shadow_memory.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/readme" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/shadow_memory.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/union_util.cc" />
+        <option value="$PROJECT_DIR$/tests/plugin/tests/SE_tests.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/DFSan/dfsan.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/taint_propagation.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/tainting.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/tainting.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/taint.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/defs.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/DFSan_taint.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/label_propagation.c" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/dfsan.cc" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/dfsan.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/lib/SE/dfsan_interface.h" />
+        <option value="$PROJECT_DIR$/tests/plugin/Makefile" />
+        <option value="$PROJECT_DIR$/tests/plugin/SE_labels.c" />
+      </list>
+    </option>
+  </component>
+  <component name="OCFindUsagesOptions" text="true" ivars="false" properties="true" derivedClasses="false" />
+  <component name="ProjectConfigurationFiles">
+    <option name="files">
+      <list>
+        <option value="$PROJECT_DIR$/.idea/qemu.iml" />
+        <option value="$PROJECT_DIR$/.idea/misc.xml" />
+        <option value="$PROJECT_DIR$/.idea/modules.xml" />
+        <option value="$PROJECT_DIR$/.idea/vcs.xml" />
+      </list>
+    </option>
+  </component>
+  <component name="ProjectFrameBounds" fullScreen="true">
+    <option name="x" value="95" />
+    <option name="y" value="24" />
+    <option name="width" value="1123" />
+    <option name="height" value="961" />
+  </component>
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectView">
+    <navigator proportions="" version="1">
+      <foldersAlwaysOnTop value="true" />
+    </navigator>
+    <panes>
+      <pane id="Scope" />
+      <pane id="ProjectPane">
+        <subPane>
+          <expand>
+            <path>
+              <item name="qemu" type="b2602c69:ProjectViewProjectNode" />
+              <item name="qemu" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="qemu" type="b2602c69:ProjectViewProjectNode" />
+              <item name="qemu" type="462c0819:PsiDirectoryNode" />
+              <item name="tests" type="462c0819:PsiDirectoryNode" />
+            </path>
+            <path>
+              <item name="qemu" type="b2602c69:ProjectViewProjectNode" />
+              <item name="qemu" type="462c0819:PsiDirectoryNode" />
+              <item name="tests" type="462c0819:PsiDirectoryNode" />
+              <item name="plugin" type="462c0819:PsiDirectoryNode" />
+            </path>
+          </expand>
+          <select />
+        </subPane>
+      </pane>
+    </panes>
+  </component>
+  <component name="PropertiesComponent">
+    <property name="ASKED_SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
+    <property name="WebServerToolWindowFactoryState" value="false" />
+    <property name="cf.advertisement.text.has.clang-format" value="true" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/tests/plugin/lib/DFSan" />
+    <property name="nodejs_interpreter_path.stuck_in_default_project" value="undefined stuck path" />
+    <property name="nodejs_npm_path_reset_for_default_project" value="true" />
+    <property name="settings.editor.selected.configurable" value="editor.preferences.fonts.default" />
+    <property name="two.files.diff.last.used.file" value="$PROJECT_DIR$/tests/plugin/lib/DFSan/dfsan.c" />
+  </component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/tests/plugin/lib/DFSan" />
+      <recent name="$PROJECT_DIR$/tests/plugin" />
+      <recent name="$PROJECT_DIR$/tests/plugin/tests" />
+      <recent name="$PROJECT_DIR$/tests/plugin/lib/SE" />
+      <recent name="$PROJECT_DIR$/tests/plugin/lib/SE/sanitizer_common" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/tests/plugin/lib/SE" />
+      <recent name="$PROJECT_DIR$/tests/plugin/lib/DFSan" />
+    </key>
+  </component>
+  <component name="RunDashboard">
+    <option name="ruleStates">
+      <list>
+        <RuleState>
+          <option name="name" value="ConfigurationTypeDashboardGroupingRule" />
+        </RuleState>
+        <RuleState>
+          <option name="name" value="StatusDashboardGroupingRule" />
+        </RuleState>
+      </list>
+    </option>
+  </component>
+  <component name="SvnConfiguration">
+    <configuration />
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="8c553d01-b7ac-419d-a033-518fd77130fd" name="Default Changelist" comment="" />
+      <created>1591378423675</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1591378423675</updated>
+      <workItem from="1591378425064" duration="3205000" />
+      <workItem from="1591412827037" duration="80363000" />
+      <workItem from="1592872045259" duration="70500000" />
+      <workItem from="1594154617911" duration="211825000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TimeTrackingManager">
+    <option name="totallyTimeSpent" value="365893000" />
+  </component>
+  <component name="ToolWindowManager">
+    <frame x="0" y="0" width="1680" height="1050" extended-state="0" />
+    <editor active="true" />
+    <layout>
+      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.17460318" />
+      <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
+      <window_info id="Favorites" order="2" side_tool="true" />
+      <window_info anchor="bottom" id="Message" order="0" />
+      <window_info anchor="bottom" id="Find" order="1" weight="0.32959184" />
+      <window_info anchor="bottom" id="Run" order="2" />
+      <window_info anchor="bottom" id="Debug" order="3" weight="0.4" />
+      <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
+      <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
+      <window_info anchor="bottom" id="TODO" order="6" />
+      <window_info anchor="bottom" id="Database Changes" order="7" />
+      <window_info anchor="bottom" id="Version Control" order="8" visible="true" weight="0.32959184" />
+      <window_info anchor="bottom" id="Terminal" order="9" weight="0.32959184" />
+      <window_info anchor="bottom" id="Event Log" order="10" side_tool="true" />
+      <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
+      <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
+      <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
+      <window_info anchor="right" id="Database" order="3" weight="0.32967034" />
+    </layout>
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="1" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State>
+              <option name="RECENTLY_FILTERED_USER_GROUPS">
+                <collection />
+              </option>
+              <option name="RECENTLY_FILTERED_BRANCH_GROUPS">
+                <collection />
+              </option>
+              <option name="COLUMN_ORDER">
+                <list>
+                  <option value="0" />
+                  <option value="1" />
+                  <option value="2" />
+                  <option value="3" />
+                </list>
+              </option>
+            </State>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="XPathView.XPathProjectComponent">
+    <history />
+    <find-history />
+  </component>
+  <component name="editorHistoryManager">
+    <entry file="file://$PROJECT_DIR$/tcg/i386/tcg-target.opc.h">
+      <provider selected="true" editor-type-id="text-editor" />
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/DFSan/sanitizer_atomic.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="521">
+          <caret line="62" lean-forward="true" selection-start-line="62" selection-end-line="62" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/DFSan/sanitizer_common/sanitizer_atomic.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="980">
+          <caret line="70" column="23" selection-start-line="70" selection-start-column="23" selection-end-line="70" selection-end-column="23" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/DFSan/sanitizer_common/sanitizer_common.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1064">
+          <caret line="76" column="1" selection-start-line="76" selection-start-column="1" selection-end-line="76" selection-end-column="1" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/DFSan/taint_allocator.cc">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="84">
+          <caret line="6" selection-start-line="6" selection-end-line="6" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/DFSan/dfsan.cc">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1211">
+          <caret line="98" selection-start-line="98" selection-end-line="98" />
+          <folding>
+            <element signature="e#4571#4622#0" expanded="true" />
+            <element signature="e#7853#11193#0" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/dfsan.c">
+      <provider selected="true" editor-type-id="text-editor" />
+    </entry>
+    <entry file="file://$PROJECT_DIR$/capstone/utils.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="52">
+          <caret line="33" selection-start-line="33" selection-end-line="33" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/sanitizer_common/sanitizer_atomic.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="882">
+          <caret line="65" lean-forward="true" selection-start-line="65" selection-end-line="65" />
+          <folding>
+            <element signature="e#1460#1496#0" expanded="true" />
+            <element signature="e#1521#1556#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/sanitizer_common/sanitizer_atomic_clang_x86.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="238">
+          <caret line="17" column="23" lean-forward="true" selection-start-line="17" selection-start-column="23" selection-end-line="17" selection-end-column="23" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/DFSan/dfsan_platform.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="639">
+          <caret line="57" column="11" lean-forward="true" selection-start-line="57" selection-start-column="11" selection-end-line="57" selection-end-column="21" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/union_hashtable.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="56">
+          <caret line="4" column="12" selection-start-line="4" selection-start-column="12" selection-end-line="4" selection-end-column="12" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/taint_allocator.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="42">
+          <caret line="3" column="12" selection-start-line="3" selection-start-column="12" selection-end-line="3" selection-end-column="12" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/sanitizer_common/sanitizer_platform.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-3266" />
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/union_util.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="42">
+          <caret line="3" column="12" selection-start-line="3" selection-start-column="12" selection-end-line="3" selection-end-column="12" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/sanitizer_common/sanitizer_common.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="433">
+          <caret line="57" column="58" lean-forward="true" selection-start-line="57" selection-start-column="58" selection-end-line="57" selection-end-column="58" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/dfsan_platform.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-24">
+          <caret line="30" selection-start-line="30" selection-end-line="30" selection-end-column="6" />
+          <folding>
+            <element signature="e#977#1298#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/sanitizer_common/sanitizer_internal_defs.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="219">
+          <caret line="116" column="6" lean-forward="true" selection-start-line="116" selection-start-column="6" selection-end-line="116" selection-end-column="6" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/shadow_memory.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="14">
+          <caret line="1" column="23" selection-start-line="1" selection-start-column="23" selection-end-line="1" selection-end-column="23" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/shadow_memory.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="125">
+          <caret line="96" column="23" selection-start-line="96" selection-start-column="6" selection-end-line="96" selection-end-column="23" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/tests/taint_tests.c">
+      <provider selected="true" editor-type-id="text-editor" />
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/temp">
+      <provider selected="true" editor-type-id="text-editor">
+        <state>
+          <caret column="136" selection-start-column="136" selection-end-column="136" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/tests/shadow_aux_tests.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="14">
+          <caret line="1" column="85" selection-start-line="1" selection-start-column="85" selection-end-line="1" selection-end-column="85" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/shadow_memory.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="70">
+          <caret line="5" column="21" selection-start-line="5" selection-start-column="21" selection-end-line="5" selection-end-column="21" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/union_hashtable.cc">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="179">
+          <caret line="19" column="44" selection-start-line="19" selection-start-column="44" selection-end-line="19" selection-end-column="44" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/readme">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="112">
+          <caret line="8" column="125" selection-start-line="8" selection-start-column="125" selection-end-line="8" selection-end-column="125" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/DFSan/dfsan.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="128">
+          <caret line="15" selection-start-line="15" selection-end-line="17" selection-end-column="21" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/capstone/include/x86.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="184">
+          <caret line="274" column="15" selection-start-line="274" selection-start-column="4" selection-end-line="274" selection-end-column="15" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/utility.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-145" />
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/union_util.cc">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="364">
+          <caret line="26" column="21" selection-start-line="26" selection-start-column="21" selection-end-line="26" selection-end-column="21" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/taint_allocator.cc">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="321">
+          <caret line="28" column="10" selection-start-line="28" selection-start-column="10" selection-end-line="28" selection-end-column="10" />
+          <folding>
+            <element signature="e#0#48#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/tests/dfsan_tests.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="280">
+          <caret line="87" column="41" selection-start-line="87" selection-start-column="41" selection-end-line="87" selection-end-column="41" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/DFSan/dfsan_interface.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="600">
+          <caret line="65" column="28" selection-start-line="65" selection-start-column="12" selection-end-line="65" selection-end-column="28" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/DFSan/dfsan.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="186">
+          <caret line="243" column="35" selection-start-line="243" selection-start-column="24" selection-end-line="243" selection-end-column="39" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/utility.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="378">
+          <caret line="27" column="26" selection-start-line="27" selection-start-column="22" selection-end-line="27" selection-end-column="26" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/taint_propagation.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="14">
+          <caret line="5" selection-start-line="5" selection-end-line="5" selection-end-column="26" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/tainting.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="14">
+          <caret line="209" column="24" selection-start-line="209" selection-start-column="21" selection-end-line="209" selection-end-column="24" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/taint_propagation.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="532">
+          <caret line="38" lean-forward="true" selection-start-line="38" selection-end-line="38" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/labels.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-890">
+          <caret line="282" column="27" selection-start-line="282" selection-start-column="25" selection-end-line="282" selection-end-column="27" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/taint.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="210">
+          <caret line="466" column="25" selection-start-line="466" selection-start-column="25" selection-end-line="466" selection-end-column="25" />
+          <folding>
+            <element signature="e#4045#4344#0" expanded="true" />
+            <element signature="e#8770#9032#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/tainting.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="150">
+          <caret line="93" column="46" selection-start-line="93" selection-start-column="46" selection-end-line="93" selection-end-column="46" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/defs.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="613">
+          <caret line="46" column="10" selection-start-line="46" selection-start-column="4" selection-end-line="46" selection-end-column="10" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/shadow_memory.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="336">
+          <caret line="68" column="10" selection-start-line="68" selection-start-column="10" selection-end-line="68" selection-end-column="10" />
+          <folding>
+            <element signature="e#184#466#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/DFSan_taint.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="101">
+          <caret line="195" column="75" selection-start-line="195" selection-start-column="75" selection-end-line="195" selection-end-column="75" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/tests/SE_tests.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="336">
+          <caret line="24" selection-start-line="24" selection-end-line="24" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/label_propagation.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="2927">
+          <caret line="280" column="1" selection-start-line="280" selection-start-column="1" selection-end-line="280" selection-end-column="1" />
+          <folding>
+            <element signature="e#402#432#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/dfsan.cc">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="51">
+          <caret line="508" column="21" selection-start-line="508" selection-start-column="21" selection-end-line="508" selection-end-column="21" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/dfsan.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="448">
+          <caret line="53" column="26" selection-start-line="53" selection-start-column="26" selection-end-line="53" selection-end-column="26" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/lib/SE/dfsan_interface.h">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="353">
+          <caret line="99" selection-start-line="99" selection-end-line="99" />
+          <folding>
+            <element signature="e#3895#4050#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/Makefile">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="406">
+          <caret line="29" column="211" selection-start-line="29" selection-start-column="211" selection-end-line="29" selection-end-column="211" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/tests/plugin/SE_labels.c">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="532">
+          <caret line="220" column="16" selection-start-line="220" selection-start-column="16" selection-end-line="220" selection-end-column="16" />
+          <folding>
+            <element signature="e#23199#23220#0" expanded="true" />
+            <element signature="e#24431#24524#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+  </component>
+</project>

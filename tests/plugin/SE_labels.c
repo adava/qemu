@@ -33,17 +33,13 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
 #define PLUGIN_OPT
 
-typedef enum {
-    COUNT_CLASS,
-    COUNT_INDIVIDUAL,
-    COUNT_NONE
-} CountType;
 //static bool plugin_optimize=true;
 
 static bool do_inline;
 static bool verbose;
 GHashTable *unsupported_ins_log;
 GHashTable *syscall_rets;
+static uint32_t invocation_counter;
 
 static inline void analyzeOp(shad_inq *inq, cs_x86_op operand){
     switch(operand.type){
@@ -151,23 +147,6 @@ static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
     }
 }
 
-static void op_record_values(unsigned int cpu_index, void *udata) {
-    INIT_ARG(arg,udata);
-    READ_VALUE(arg->src,&arg->vals->src_val);
-    READ_VALUE(arg->src2,&arg->vals->src2_val);
-    READ_VALUE(arg->dst,&arg->vals->dst_val);
-//    g_autofree gchar *report = g_strdup_printf("in op_record_values!\n");
-//    qemu_plugin_outs(report);
-}
-
-
-//static void free_record(gpointer data)
-//{
-//    shadow_page *rec = (shadow_page *) data;
-//    g_free(rec->bitmap);
-//    g_free(rec);
-//}
-
 static void plugin_exit(qemu_plugin_id_t id, void *p)
 {
     g_autofree gchar *report = g_strdup_printf("\nDEBUG output end:\n");
@@ -194,6 +173,7 @@ printf("debugging information for 2nd code cache optimization would not be print
     syscall_rets =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
 
     dfsan_init();
+    invocation_counter = 0;
 #ifdef CONFIG_2nd_CCACHE
     second_ccache_flag = CHECK;
 #endif
@@ -235,8 +215,9 @@ static void syscall_ret_callback(qemu_plugin_id_t id, unsigned int vcpu_idx, int
         g_string_append_printf(out,"\tTainting syscall num: %"PRIu64, num);
         uint64_t *addr = g_hash_table_lookup(syscall_rets, (gpointer)num);
         if(addr!=NULL){
+            invocation_counter++;
             //create a label per byte
-            mark_input_bytes((void *)*addr, ret, 0xff);
+            mark_input_bytes((void *)*addr, ret, invocation_counter);
             int removed = g_hash_table_remove(syscall_rets, (gpointer)num);
             g_assert(removed);
             g_string_append_printf(out,"\t addr=0x%"PRIx64"\tret=%"PRIu64" is done.\n",*addr,ret);
@@ -316,7 +297,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb_args->src2.addr.id = 0;
                 cb = taint_cb_2ops;
                 break;
-            case X86_INS_SHR: //since we are not precise, all arithmetics are similar
+            case X86_INS_SHR: //all arithmetics are similar, flags would be affected TODO
             case X86_INS_SAR:
             case X86_INS_SHL:
             case X86_INS_AND:
@@ -343,7 +324,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb_args->src2.type = 0;
                 cb_args->src2.addr.id = UNASSIGNED;
                 copy_inq(cb_args->src,cb_args->dst);
-                cb_args->dst.type = GLOBAL_IMPLICIT;
+                cb_args->dst.type = (enum shadow_type)((uint8_t)(cb_args->dst.type)+1);
                 cb = taint_cb_2ops;
                 break;
             case X86_INS_BSF:
@@ -356,18 +337,18 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_BTR:
             case X86_INS_BTS:
                 //only propagate conservatively to the flags
-                cb_args->dst.type = GLOBAL;
+                cb_args->dst.type = GLOBAL_IMPLICIT;
                 cb_args->dst.addr.id = FLAG_REG;
                 cb = taint_cb_mov;
                 break;
             case X86_INS_PUSH:
-                cb_args->dst.type = MEMORY;
+                cb_args->dst.type = MEMORY_IMPLICIT;
                 cb_args->dst.size = cb_args->src.size;
-                cb_args->src.type==IMMEDIATE?(cb = taint_cb_clear_all):(cb = taint_cb_mov);
+                cb = cb_args->src.type==IMMEDIATE?taint_cb_clear_all:taint_cb_mov;
                 break;
             case X86_INS_POP:
                 copy_inq(cb_args->src,cb_args->dst);
-                cb_args->src.type = MEMORY;
+                cb_args->src.type = MEMORY_IMPLICIT;
                 cb_args->src.addr.vaddr = 0;
                 cb_args->src.type==IMMEDIATE?(cb = taint_cb_clear_all):(cb = taint_cb_mov);
                 break;
@@ -429,6 +410,8 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb = taint_cb_XCHG;
                 break;
             case X86_INS_CMPXCHG:
+                cb_args->src2.addr.id=MAP_X86_REGISTER(X86_REG_RAX);
+                cb_args->src2.type=GLOBAL_IMPLICIT;
                 cb = taint_cb_CMPCHG;
                 break;
             case X86_INS_IMUL:
@@ -462,29 +445,29 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 ALLOC_SET0(cb_args,inst_callback_argument)
 
                 cb_args->src.addr.id=MAP_X86_REGISTER(X86_REG_RCX);
-                cb_args->src.type=GLOBAL;
+                cb_args->src.type=GLOBAL_IMPLICIT;
                 cb_args->src.size=SHD_SIZE_u64;
 
                 cb_args->dst.addr.id=MAP_X86_REGISTER(X86_REG_RSP); //propagate from RCX to RSP
-                cb_args->dst.type=GLOBAL;
+                cb_args->dst.type=GLOBAL_IMPLICIT;
                 cb_args->dst.size=SHD_SIZE_u64;
 
                 cb_args->src2.addr.id=MAP_X86_REGISTER(X86_REG_RDX);
-                cb_args->src2.type=GLOBAL;
+                cb_args->src2.type=GLOBAL_IMPLICIT;
                 cb_args->src2.size=SHD_SIZE_u64;
 
                 cb_args->src3.addr.id=MAP_X86_REGISTER(X86_REG_RIP); //propagate from RDX to RSP
-                cb_args->src3.type=GLOBAL;
+                cb_args->src3.type=GLOBAL_IMPLICIT;
                 cb_args->src3.size=SHD_SIZE_u64;
 
                 cb = taint_cb_mov2;
                 break;
             case X86_INS_CALL:
                 cb_args->src2.addr.id = R_EIP;
-                cb_args->src2.type = GLOBAL;
+                cb_args->src2.type = GLOBAL_IMPLICIT; //IMPLICIT mentioning doesn't matter as long as there is not union (instruction recording) but I do it anyway
                 cb_args->src2.size = SHD_SIZE_u64;
                 cb_args->dst.addr.id = R_ESP;
-                cb_args->dst.type = GLOBAL;
+                cb_args->dst.type = GLOBAL_IMPLICIT;
                 cb_args->dst.size = SHD_SIZE_u64;
                 cbType = BEFORE;
                 cb = taint_cb_CALL;
@@ -492,25 +475,25 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_RET:
                 cb_args = malloc(sizeof(inst_callback_argument));
                 cb_args->src.addr.id = R_ESP;
-                cb_args->src.type = GLOBAL;
+                cb_args->src.type = GLOBAL_IMPLICIT;
                 cb_args->src.size = SHD_SIZE_u64;
                 cb_args->dst.addr.id = R_EIP;
-                cb_args->dst.type = GLOBAL;
+                cb_args->dst.type = GLOBAL_IMPLICIT;
                 cb_args->dst.size = SHD_SIZE_u64;
                 cb = taint_cb_RET;
                 cbType = BEFORE;
                 break;
             case X86_INS_LEAVE:
             ALLOC_SET0(cb_args,inst_callback_argument)
-                cb_args->src.type = MEMORY;
+                cb_args->src.type = MEMORY_IMPLICIT;
                 cb_args->src.size = SHD_SIZE_u64;
 
                 cb_args->src2.addr.id=MAP_X86_REGISTER(X86_REG_RBP);
-                cb_args->src2.type=GLOBAL;
+                cb_args->src2.type=GLOBAL_IMPLICIT;
                 cb_args->src2.size=SHD_SIZE_u64;
 
                 cb_args->dst.addr.id=MAP_X86_REGISTER(X86_REG_RSP);
-                cb_args->dst.type=GLOBAL;
+                cb_args->dst.type=GLOBAL_IMPLICIT;
                 cb_args->dst.size=SHD_SIZE_u64;
 
                 cb = taint_cb_LEAVE;
@@ -542,19 +525,19 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_CPUID:
                 ALLOC_SET0(cb_args,inst_callback_argument)
                 cb_args->src.addr.id=MAP_X86_REGISTER(X86_REG_RAX);
-                cb_args->src.type=GLOBAL;
+                cb_args->src.type=GLOBAL_IMPLICIT;
                 cb_args->src.size=SHD_SIZE_u64;
 
                 cb_args->src2.addr.id=MAP_X86_REGISTER(X86_REG_RBX);
-                cb_args->src2.type=GLOBAL;
+                cb_args->src2.type=GLOBAL_IMPLICIT;
                 cb_args->src2.size=SHD_SIZE_u64;
 
                 cb_args->src3.addr.id=MAP_X86_REGISTER(X86_REG_RCX);
-                cb_args->src3.type=GLOBAL;
+                cb_args->src3.type=GLOBAL_IMPLICIT;
                 cb_args->src3.size=SHD_SIZE_u64;
 
                 cb_args->dst.addr.id=MAP_X86_REGISTER(X86_REG_RDX);
-                cb_args->dst.type=GLOBAL;
+                cb_args->dst.type=GLOBAL_IMPLICIT;
                 cb_args->dst.size=SHD_SIZE_u64;
 
                 cb = taint_cb_clear_all;
@@ -563,11 +546,11 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 //print_ops(cs_ptr->mnemonic, cs_ptr->op_str);
                 ALLOC_SET0(cb_args,inst_callback_argument)
                 cb_args->src.addr.id=MAP_X86_REGISTER(X86_REG_RAX);
-                cb_args->src.type=GLOBAL;
+                cb_args->src.type=GLOBAL_IMPLICIT;
                 cb_args->src.size=SHD_SIZE_u64;
 
                 cb_args->src2.addr.id=MAP_X86_REGISTER(X86_REG_RDX);
-                cb_args->src2.type=GLOBAL;
+                cb_args->src2.type=GLOBAL_IMPLICIT;
                 cb_args->src2.size=SHD_SIZE_u64;
 
                 cb = taint_cb_clear_all;
@@ -599,14 +582,13 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_STOSW:
             case X86_INS_STOSD:
             case X86_INS_STOSQ:
-                //the problem is that inserting the cb after the instruction is too late (never hit), and before is too soon; we don't have the address.
                 //we should compute the effective address
                 copy_inq(cb_args->src,cb_args->dst);
                 cb_args->src.addr.id=MAP_X86_REGISTER(X86_REG_RAX);
                 cb_args->src.type=GLOBAL_IMPLICIT;
 //                cb_args->src.size=cb_args->dst.size; already set to that
                 cb = taint_cb_mov;
-                cbType = INMEM;
+                cbType = INMEM; //the problem is that inserting the cb after the instruction is too late (never hit), and before is too soon; we don't have the address.
                 break;
             case X86_INS_NOP:
                 free(cb_args);
@@ -630,26 +612,26 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 }
                 break;
         }
-        //register memory callback to get the vaddr if one of the operands is mem
+        //register memory callback to get the vaddr if one of the operands is mem (only one operand address would be retrieved that is consistent with x86)
         if (cb_args!=NULL){
             //usr_data should be allocated
             usr_data = (void*)cb_args;
-            if (cb_args->src.type == MEMORY){
+            if (cb_args->src.type == MEMORY || cb_args->src.type == MEMORY_IMPLICIT){ //for instance Pop
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->src.addr.vaddr);
                 mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);
             }
-            else if (cb_args->src2.type == MEMORY){ //for instance in CMP or ADC
+            else if (cb_args->src2.type == MEMORY){ //for instance in CMP or ADC, src shouldn't be MEMORY_IMPLICIT
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->src2.addr.vaddr);
                 mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);
             }
-            else if (cb_args->src3.type == MEMORY){ //for instance FP with 3 ops
+            else if (cb_args->src3.type == MEMORY){ //for instance FP with 3 ops, src3 shouldn't be MEMORY_IMPLICIT
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->src3.addr.vaddr);
                 mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);
             }
-            else if (cb_args->dst.type == MEMORY){
+            else if (cb_args->dst.type == MEMORY  || cb_args->dst.type == MEMORY_IMPLICIT){ //for instance Push
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->dst.addr.vaddr);
                 mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);

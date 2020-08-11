@@ -51,7 +51,7 @@ dfsan_label dfsan_create_label(off_t offset);
 dfsan_label dfsan_get_label(const void *addr);
 
 // taint source
-static void mark_input_bytes(uint64_t *addr, int64_t ret, uint8_t value);
+void mark_input_bytes(void *addr, int64_t ret, uint8_t value);
 
 void dfsan_fini(void);
 

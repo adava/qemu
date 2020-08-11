@@ -27,8 +27,7 @@
 #define set_taint(dst,val) \
         if(dst.type==GLOBAL){ \
             dfsan_set_register_label(dst.addr.id,val); \
-            dfsan_set_label(val,(void *)dst.addr.vaddr,dst.size); \
-            }
+         }else dfsan_set_label(val,(void *)dst.addr.vaddr,dst.size);
 
 
 static void taint_cb_clear(unsigned int cpu_index, void *udata){
@@ -141,7 +140,7 @@ static void taint_cb_CMPCHG(unsigned int cpu_index, void *udata){
     dfsan_label l1 = get_taint(arg->dst);
     dfsan_label l2 = get_taint(regEAX); //eax=dst (if eax!=dst) part that we conservatively propagate
     dfsan_label l3 = dfsan_union(l1, l2); //either than branch executes that results in dst taint being loaded, or doesn't that previous eax holds
-    set_taint(regEAX,l2);
+    set_taint(regEAX,l3);
 
     OUTPUT_ERROR(err,arg,"CMPCHG propagate from dst to EAX");
 
@@ -194,7 +193,7 @@ static void taint_cb_JUMP(unsigned int cpu_index, void *udata) {
     }
 //    printf("finished JUMP CB\n");
 }
-
+//TODO: BUG the parameter changing remains for the next cb call (RET cb too)
 static void taint_cb_CALL(unsigned int cpu_index, void *udata) {
     shadow_err err = 0;
     INIT_ARG(arg,udata);

@@ -95,7 +95,7 @@ static void taint_cb_2ops(unsigned int cpu_index, void *udata){
 //    shad_inq flags={.addr.id=FLAG_REG,.type=GLOBAL_IMPLICIT};
 
     dfsan_label l1 = (arg->src.type==IMMEDIATE || arg->src.type==UNASSIGNED)?CONST_LABEL: get_taint(arg->src); //in case of IMUL with 3 ops, the src can be IMM.
-    dfsan_label l2 = (arg->src2.type==IMMEDIATE || arg->src2.type==UNASSIGNED)?CONST_LABEL: get_taint(arg->src2);  //for SETcc, type is UNASSIGNED
+    dfsan_label l2 = (arg->src2.type==IMMEDIATE || arg->src2.type==UNASSIGNED)?CONST_LABEL: get_taint(arg->src2);  //for SETcc and MOVcc, type is UNASSIGNED
 
     if(arg->src2.type==MEMORY && arg->dst.type==MEMORY_IMPLICIT){ //ADD and FP instructions
         arg->dst.addr.vaddr = arg->src2.addr.vaddr;
@@ -165,15 +165,14 @@ static void taint_cb_CMPCHG(unsigned int cpu_index, void *udata){
     shadow_err err = 0;
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_CMPCHG");
-    shad_inq regEAX = {.addr.id=MAP_X86_REGISTER(X86_REG_RAX),.type=GLOBAL_IMPLICIT};
 
     dfsan_label l1 = get_taint(arg->src); //dst=src (if eax==dst)
     dfsan_label l2 = get_taint(arg->dst);
-    dfsan_label l3 = get_taint(regEAX); //eax=dst (if eax!=dst) part that we conservatively propagate
+    dfsan_label l3 = get_taint(arg->src2); //eax=dst (if eax!=dst) part that we conservatively propagate (EAX in src2)
     dfsan_label xchg_label = CONST_LABEL;
     if(l1!=CONST_LABEL || l2!=CONST_LABEL || l3!=CONST_LABEL) {
         dfsan_label l4 =  dfsan_union(l2, l3, 0, 0,
-                                        arg->dst.addr.vaddr, regEAX.addr.id, arg->dst.type, regEAX.type, 0, UNASSIGNED);
+                                        arg->dst.addr.vaddr, arg->src2.addr.id, arg->dst.type, arg->src2.type, 0, UNASSIGNED);
         xchg_label = dfsan_union(l1, l4, arg->operation, arg->src.size,
                                                arg->src.addr.vaddr, 0, arg->src.type, MULTIPLE_OPS, 0,
                                                UNASSIGNED); //Since multiple destinations are affected, I mark destination type as UNASSIGNED
@@ -183,7 +182,7 @@ static void taint_cb_CMPCHG(unsigned int cpu_index, void *udata){
     }
     //either eax=dst branch executes that results in dst taint being loaded, or doesn't that previous eax holds
     if(l3!=CONST_LABEL || l2!=CONST_LABEL){ //otherwise EAX remains not tainted
-        set_taint(regEAX,xchg_label);
+        set_taint(arg->src2,xchg_label);
         OUTPUT_ERROR(err,arg,"CMPCHG propagate from dst to EAX");
     }
     if(l1!=CONST_LABEL || l2!=CONST_LABEL) { //otherwise dst remains not tainted
@@ -211,12 +210,10 @@ static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
     dfsan_label l4 =  dfsan_union(l1, l2, arg->operation, arg->src.size,
                                     arg->src.addr.vaddr, arg->src2.addr.vaddr, arg->src.type, arg->src2.type, 0, UNASSIGNED); //both EAX and EDX would be affected as destination
 
-    set_taint(arg->dst,l4); // eax part of mul/div
+    set_taint(arg->dst,l4); // eax part of mul/div, eax = eax | Mul
 
-    arg->dst.addr.id = arg->src3.addr.id;
-
-    dfsan_label l6 = ((l3 == CONST_LABEL)? l4 : dfsan_union(l3, l4, 0, 0, 0, 0, UNASSIGNED, UNASSIGNED, arg->dst.addr.vaddr, arg->dst.type)); //l3 is not part of l4, hence union
-    set_taint(arg->dst,l6); // edx part of mul/div
+    dfsan_label l6 = ((l3 == CONST_LABEL)? l4 : dfsan_union(l3, l4, 0, 0, 0, 0, UNASSIGNED, UNASSIGNED, arg->src3.addr.id, arg->src3.type)); //l3 is not part of l4, hence union
+    set_taint(arg->src3,l6); // edx part of mul/div
 
     shad_inq flags={.addr.id=FLAG_REG,.type=GLOBAL};
     set_taint(flags,l4);
@@ -243,11 +240,17 @@ static void taint_cb_JUMP(unsigned int cpu_index, void *udata) {
 static void taint_cb_CALL(unsigned int cpu_index, void *udata) {
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_CALL");
-    READ_VALUE(arg->dst, &arg->dst.addr.vaddr); //we need the value of stack register, we use the value as a memory address to store the eip taint
-    arg->dst.type = MEMORY;
+
+    int temp = arg->dst.addr.id;
 
     dfsan_label l1 = get_taint(arg->src2); //eip
+
+    READ_VALUE(arg->dst, &arg->dst.addr.vaddr); //we need the value of stack register, we use the value as a memory address to store the eip taint
+    arg->dst.type = MEMORY_IMPLICIT;
     set_taint(arg->dst,l1);
+
+    arg->dst.addr.vaddr = temp;
+    arg->dst.type = GLOBAL_IMPLICIT; //restore for the next cb call
 
     //check the destination address
     dfsan_label jmp_addr = 0;
@@ -262,9 +265,14 @@ static void taint_cb_RET(unsigned int cpu_index, void *udata) { //reverse of CAL
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_RET");
 
+    int temp = arg->src.addr.id;
+
     READ_VALUE(arg->src, &arg->src.addr.vaddr);
-    arg->src.type = MEMORY;
+    arg->src.type = MEMORY_IMPLICIT;
     dfsan_label l1 = get_taint(arg->src); //esp
+
+    arg->src.addr.vaddr = temp;
+    arg->src.type = GLOBAL_IMPLICIT; //restore for the next cb call
 
     set_taint(arg->dst,l1); //eip
 

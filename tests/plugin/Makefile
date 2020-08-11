@@ -27,7 +27,7 @@ QEMU_CFLAGS += -I$(SRC_PATH)/include/qemu
 all: $(SONAMES)
 
 libSE_labels.so: SE_labels.o
-	$(CC) ./lib/SE/dfsan.o ./lib/SE/taint_allocator.o ./lib/SE/union_util.o ./lib/SE/union_hashtable.o -shared -Wl,-soname,$@ -o $@ $^ $(LDLIBS)
+	$(CC) -shared -Wl,-soname,$@ -o $@ $^ $(LDLIBS) $(SRC_PATH)/tests/plugin/lib/SE/dfsan.o $(SRC_PATH)/tests/plugin/lib/SE/taint_allocator.o $(SRC_PATH)/tests/plugin/lib/SE/union_util.o $(SRC_PATH)/tests/plugin/lib/SE/union_hashtable.o
 
 lib%.so: %.o
 	$(CC) -shared -Wl,-soname,$@ -o $@ $^ $(LDLIBS)
