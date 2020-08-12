@@ -10,6 +10,8 @@
  *   See the COPYING file in the top-level directory.
  */
 
+// run by: ./x86_64-linux-user/qemu-x86_64 -D ./SE_shadow.log -plugin tests/plugin/libSE_labels.so,arg=union_labels.txt [path to binary like ./a.out]
+
 #include <inttypes.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -37,7 +39,7 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
 //static bool plugin_optimize=true;
 
-static bool do_inline;
+static char *label_file;
 static bool verbose;
 GHashTable *unsupported_ins_log;
 GHashTable *syscall_rets;
@@ -152,7 +154,7 @@ static void plugin_exit(qemu_plugin_id_t id, void *p)
     g_autofree gchar *report = g_strdup_printf("\nDEBUG output end:\n");
     qemu_plugin_outs(report);
 
-    //dfsan_fini();
+    dfsan_fini(label_file);
 
     g_autoptr(GString) end_rep = g_string_new("\n");
     print_unsupported_ins(end_rep,unsupported_ins_log);
@@ -693,8 +695,8 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
 
     for (i = 0; i < argc; i++) {
         char *p = argv[i];
-        if (strcmp(p, "inline") == 0) {
-            do_inline = true;
+        if (i == 0) {
+            label_file = strdup(p);
         } else if (strcmp(p, "verbose") == 0) {
             verbose = true;
         }

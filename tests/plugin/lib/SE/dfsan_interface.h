@@ -96,7 +96,7 @@ void mark_input_bytes(void *addr, int64_t ret, uint8_t value);
 
 void dfsan_init(void);
 
-void dfsan_fini(void);
+void dfsan_fini(char *lfile);
 
 #ifdef __cplusplus
 }  // extern "C"
