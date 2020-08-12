@@ -24,6 +24,8 @@
 //#include "lib/shadow_memory.h"
 #include "lib/SE/label_propagation.c"
 
+#define print_arg(name,src) printf("%s => id=%lu, type=%d\n",name,src.addr.vaddr, src.type)
+
 QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
@@ -170,7 +172,7 @@ printf("debugging information for 2nd code cache optimization would not be print
 #endif
     unsupported_ins_log =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     syscall_rets =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
-
+    init_register_mapping();
     dfsan_init();
     invocation_counter = 0;
 #ifdef CONFIG_2nd_CCACHE

@@ -174,8 +174,8 @@ dfsan_label __taint_union(dfsan_label l1, dfsan_label l2, u16 op, u16 size,
   if (l1 == 0 && l2 < CONST_OFFSET /*&& op != fsize*/) return 0; //sina: no fsize at the moment
   if (l1 == kInitializingLabel || l2 == kInitializingLabel) return kInitializingLabel;
 
-  if (l1 >= CONST_OFFSET) op1 = 0;
-  if (l2 >= CONST_OFFSET) op2 = 0;
+//  if (l1 >= CONST_OFFSET) op1 = 0;
+//  if (l2 >= CONST_OFFSET) op2 = 0;
 
   struct dfsan_label_info label_info = {
     .l1 = l1, .l2 = l2, .op1 = op1, .op1_type=op1_type , .op2 = op2, .op2_type = op2_type, .dest = dest, .dest_type = dest_type, .op = op, .size = size,

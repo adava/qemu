@@ -192,7 +192,7 @@ printf("debugging information for 2nd code cache optimization would not be print
 #endif
     unsupported_ins_log =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     syscall_rets =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
-
+    init_register_mapping();
     dfsan_init();
 #ifdef CONFIG_2nd_CCACHE
     second_ccache_flag = CHECK;
