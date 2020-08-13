@@ -94,7 +94,7 @@ void dfsan_dump_labels(int fd);
 
 void mark_input_bytes(void *addr, int64_t ret, uint8_t value);
 
-void dfsan_init(void);
+void dfsan_init(guest_memory_read_func func);
 
 void dfsan_fini(char *lfile);
 

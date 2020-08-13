@@ -26,6 +26,8 @@
 
 #define op_start_id X86_INS_ENDING + 1 //sina: change to the starting ID to avoid conflict with the ISA
 
+typedef void (*guest_memory_read_func)(uint64_t vaddr, int len, void *buf);
+
 typedef unsigned long uptr;
 typedef uint32_t dfsan_label;
 

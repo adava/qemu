@@ -62,6 +62,8 @@ const char *dump_labels_at_exit = "dfsan_labels.txt";
 static atomic_dfsan_label __dfsan_last_label;
 static dfsan_label_info *__dfsan_label_info;
 
+static guest_memory_read_func read_guest;
+
 // Hash table
 static const uptr hashtable_size = (1ULL << 32);
 static const size_t union_table_size = (1ULL << 18);
@@ -265,9 +267,11 @@ dfsan_label __taint_union_load(const void *addr, const dfsan_label *ls, uptr n) 
         }
         if (shape_ext) {
             for (uptr i = 0; i < shape_ext; ++i) {
-//        char *c = (char *)app_for(&ls[load_size + i]);  //sina: we should make sure app_for() would take us to the guest memory from the shadow address; with the current mapping flaw, this is not possible (collision)
-                char *c = (char *) (addr + load_size + i); //TODO: read the guest memory
-                ret = __taint_union(ret, 0, Concat, (load_size + i + 1) * 8, 0, *c, UNASSIGNED, IMMEDIATE, 0,
+                char c = '\0';
+                read_guest((uint64_t)(addr + load_size + i),1,(void *)&c);
+                printf("c=%c\n",c);
+
+                ret = __taint_union(ret, 0, Concat, (load_size + i + 1) * 8, 0, c, UNASSIGNED, IMMEDIATE, 0,
                                     UNASSIGNED);  //sina: keeping track of the constants, and storing them
             }
         }
@@ -574,7 +578,7 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_fini(char *lfile) {
 }
 
 #if SANITIZER_CAN_USE_PREINIT_ARRAY
-extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init() {
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init(guest_memory_read_func func) {
 
     __dfsan::kShadowSize = MappingArchImpl<MAPPING_UNION_TABLE_ADDR>() - MappingArchImpl<MAPPING_SHADOW_ADDR>();
     __dfsan::kUnionTableSize = MappingArchImpl<MAPPING_HASH_TABLE_ADDR>() - MappingArchImpl<MAPPING_UNION_TABLE_ADDR>();
@@ -605,13 +609,15 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init() {
   memset(registers_shadow,0,GLOBAL_POOL_SIZE*sizeof(dfsan_label));
 
   SHD_init();
+
+  read_guest = func;
 }
 
 __attribute__((section(".preinit_array"), used))
 static void (*dfsan_init_ptr)(int, char **, char **) = dfsan_init;
 
 #else
-extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init() {
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init(guest_memory_read_func func) {
 
 //  the memory initialization will be done in taint alloc (because of constructors execution order)
     SHD_init();
@@ -621,5 +627,7 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init() {
     __dfsan_label_info[CONST_LABEL].size = 8;
 
     memset(registers_shadow, 0, GLOBAL_POOL_SIZE * sizeof(dfsan_label));
+
+    read_guest = func;
 }
 #endif
