@@ -269,7 +269,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 //better to take this outside, and set it to NULL for otherwise case
                 cb_args->src.type==IMMEDIATE?(cb = taint_cb_clear_all):(cb = taint_cb_mov);
                 break;
-            case X86_INS_CMOVA:
+            case X86_INS_CMOVA: //CMOVcc family does not affect flags
             case X86_INS_CMOVAE:
             case X86_INS_CMOVB:
             case X86_INS_CMOVBE:
@@ -300,9 +300,10 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb_args->src2.addr.id = 0;
                 cb = taint_cb_2ops;
                 break;
-            case X86_INS_SHR: //all arithmetics are similar, flags would be affected TODO
+            case X86_INS_SHR: //all arithmetics are similar
             case X86_INS_SAR:
             case X86_INS_SHL:
+            case X86_INS_SAL:
             case X86_INS_AND:
             case X86_INS_OR:
             case X86_INS_ROR:
@@ -311,6 +312,8 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_ADD:
                 copy_inq(cb_args->dst, cb_args->src2);
                 cb_args->dst.type = (enum shadow_type)((uint8_t)(cb_args->dst.type)+1); //convert the type to implicit
+                cb_args->flags.addr.id=FLAG_REG;
+                cb_args->flags.type=GLOBAL;
                 cb = taint_cb_2ops;
                 break;
             case X86_INS_CMP:
@@ -323,6 +326,14 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_NEG:
             case X86_INS_INC:
             case X86_INS_DEC:
+                cb_args->src2.type = 0;
+                cb_args->src2.addr.id = UNASSIGNED;
+                copy_inq(cb_args->src,cb_args->dst);
+                cb_args->dst.type = (enum shadow_type)((uint8_t)(cb_args->dst.type)+1);
+                cb_args->flags.addr.id=FLAG_REG;
+                cb_args->flags.type=GLOBAL;
+                cb = taint_cb_2ops;
+                break;
             case X86_INS_NOT:
                 cb_args->src2.type = 0;
                 cb_args->src2.addr.id = UNASSIGNED;
@@ -332,8 +343,9 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 break;
             case X86_INS_BSF:
             case X86_INS_BSR:
-                //similar to mov but also affects flags
-                cb = taint_cb_movwf;
+                cb_args->flags.addr.id=FLAG_REG;
+                cb_args->flags.type=GLOBAL;
+                cb = taint_cb_mov;
                 break;
             case X86_INS_BT:
             case X86_INS_BTC:
@@ -362,6 +374,8 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb_args->src2.type = GLOBAL_IMPLICIT;
                 cb_args->src2.addr.id = FLAG_REG;
                 cb_args->dst.type = (enum shadow_type)((uint8_t)(cb_args->dst.type)+1); //convert the type to implicit
+                cb_args->flags.addr.id=FLAG_REG;
+                cb_args->flags.type=GLOBAL;
                 cb = taint_cb_3ops;
                 break;
             case X86_INS_CWD: //propagate from AX to DX
@@ -415,6 +429,8 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_CMPXCHG:
                 cb_args->src2.addr.id=MAP_X86_REGISTER(X86_REG_RAX);
                 cb_args->src2.type=GLOBAL_IMPLICIT;
+                cb_args->flags.addr.id=FLAG_REG;
+                cb_args->flags.type=GLOBAL;
                 cb = taint_cb_CMPCHG;
                 break;
             case X86_INS_IMUL:
@@ -422,11 +438,15 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 if (inst_det->op_count==2){
                     copy_inq(cb_args->dst, cb_args->src2);
                     cb_args->dst.type = GLOBAL_IMPLICIT;
+                    cb_args->flags.addr.id=FLAG_REG;
+                    cb_args->flags.type=GLOBAL;
                     cb = taint_cb_2ops;
                     break;
                 }
                 else if (inst_det->op_count==3){ //src is immediate
                     cb = taint_cb_2ops;
+                    cb_args->flags.addr.id=FLAG_REG;
+                    cb_args->flags.type=GLOBAL;
 //                    print_ops(cs_ptr->mnemonic, cs_ptr->op_str);
                     break;
                 }
@@ -439,6 +459,10 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb_args->src3.addr.id = MAP_X86_REGISTER(X86_REG_RDX);
                 cb_args->dst.type = GLOBAL_IMPLICIT;
                 cb_args->dst.addr.id = MAP_X86_REGISTER(X86_REG_RAX);
+
+                cb_args->flags.addr.id=FLAG_REG;
+                cb_args->flags.type=GLOBAL;
+
                 cb = taint_cb_MUL_DIV;
                 break;
             case X86_INS_LEA:
@@ -520,6 +544,8 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_JP:
             case X86_INS_JS:
                 cb_args->operation = COND_JMP;
+                cb_args->src2.addr.id = FLAG_REG;
+                cb_args->src2.type = GLOBAL;
 //            case X86_INS_JRCXZ: special instruction, checks registers instead of flags
             case X86_INS_JMP:
                 cb = taint_cb_JUMP; //no propagation, just checking whether the branch condition is tainted

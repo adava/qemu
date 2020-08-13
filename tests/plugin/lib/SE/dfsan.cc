@@ -268,9 +268,7 @@ dfsan_label __taint_union_load(const void *addr, const dfsan_label *ls, uptr n) 
         if (shape_ext) {
             for (uptr i = 0; i < shape_ext; ++i) {
                 char c = '\0';
-                read_guest((uint64_t)(addr + load_size + i),1,(void *)&c);
-                printf("c=%c\n",c);
-
+                read_guest((uint64_t)(addr + load_size + i),1,(void *)&c); //read it through the set guest function since we don't have direct access (due to emulation)
                 ret = __taint_union(ret, 0, Concat, (load_size + i + 1) * 8, 0, c, UNASSIGNED, IMMEDIATE, 0,
                                     UNASSIGNED);  //sina: keeping track of the constants, and storing them
             }
@@ -562,7 +560,7 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_fini(char *lfile) {
         return;
     }
 
-    printf("INFO: DataFlowSanitizer: dumping labels to %s\n", dump_labels_at_exit);
+    printf("INFO: DataFlowSanitizer: dumping labels to %s\n", lfile);
     dfsan_dump_labels(fd);
     //dump_shadows();
     close(fd);

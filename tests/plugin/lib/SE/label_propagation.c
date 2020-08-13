@@ -31,6 +31,10 @@
         if(dst.type==GLOBAL || dst.type==GLOBAL_IMPLICIT){ \
             dfsan_set_register_label(dst.addr.id,val); \
         } else if(dst.type==MEMORY || dst.type==MEMORY_IMPLICIT) dfsan_set_label(val,(void *)dst.addr.vaddr,dst.size);
+#define set_flags(flags,label)  if(flags.type!=UNASSIGNED) {\
+                                        set_taint(flags,label);\
+                                        }
+
 
 static void taint_cb_clear_all(unsigned int cpu_index, void *udata){
     INIT_ARG(arg,udata);
@@ -58,6 +62,7 @@ static void taint_cb_mov(unsigned int cpu_index, void *udata){
     dfsan_label label = arg->src.type!=IMMEDIATE? get_taint(arg->src): CONST_LABEL; //The immediate check is kinda redundant, since we are already clearing in taint_cb_clear if immediate
     set_taint(arg->dst,label);
 
+    set_flags(arg->flags,label); //will only set flags if flags argument is set
 }
 
 static void taint_cb_mov2(unsigned int cpu_index, void *udata){
@@ -73,26 +78,9 @@ static void taint_cb_mov2(unsigned int cpu_index, void *udata){
     set_taint(arg->src3,label2);
 }
 
-static void taint_cb_movwf(unsigned int cpu_index, void *udata){ //could have used mov2 but this one incurs one less label query
-    shadow_err err = 0;
-    INIT_ARG(arg,udata);
-    DEBUG_OUTPUT(arg,"taint_cb_movwf");
-
-    dfsan_label label = arg->src.type!=IMMEDIATE? get_taint(arg->src): 0;
-    set_taint(arg->dst,label);
-    OUTPUT_ERROR(err,arg,"MOV");
-
-    shad_inq flags={.addr.id=FLAG_REG,.type=GLOBAL};
-    set_taint(flags,label);
-
-    OUTPUT_ERROR(err,arg,"MOV flags propagation");
-}
-
-static void taint_cb_2ops(unsigned int cpu_index, void *udata){
+static void taint_cb_2ops(unsigned int cpu_index, void *udata){ //TODO take care of flags
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_2ops");
-
-//    shad_inq flags={.addr.id=FLAG_REG,.type=GLOBAL_IMPLICIT};
 
     dfsan_label l1 = (arg->src.type==IMMEDIATE || arg->src.type==UNASSIGNED)?CONST_LABEL: get_taint(arg->src); //in case of IMUL with 3 ops, the src can be IMM.
     dfsan_label l2 = (arg->src2.type==IMMEDIATE || arg->src2.type==UNASSIGNED)?CONST_LABEL: get_taint(arg->src2);  //for SETcc and MOVcc, type is UNASSIGNED
@@ -108,9 +96,11 @@ static void taint_cb_2ops(unsigned int cpu_index, void *udata){
     }
     set_taint(arg->dst,dst_label);
 
+    set_flags(arg->flags,dst_label);
+
 }
 //support the union of up to three operands
-static void taint_cb_3ops(unsigned int cpu_index, void *udata){ //TODO you might need to take care of flags
+static void taint_cb_3ops(unsigned int cpu_index, void *udata){
     shadow_err err = 0;
     INIT_ARG(arg,udata);
 #define cb_debug "taint_cb_3ops"
@@ -137,6 +127,8 @@ static void taint_cb_3ops(unsigned int cpu_index, void *udata){ //TODO you might
                                   arg->src.addr.vaddr, 0, arg->src.type, MULTIPLE_OPS, arg->dst.addr.vaddr,  arg->dst.type);
     }
     set_taint(arg->dst,dst_label);
+
+    set_flags(arg->flags,dst_label);
 
     OUTPUT_ERROR(err,arg,cb_debug);
 }
@@ -189,6 +181,8 @@ static void taint_cb_CMPCHG(unsigned int cpu_index, void *udata){
         set_taint(arg->dst,xchg_label); // we conservatively propagate; note that for xchg_label, we first load dst with its previous load (left branch of MULTIPLE_OPS)
         OUTPUT_ERROR(err,arg,"CMPCHG propagate from src to dst");
     }
+
+    set_flags(arg->flags,xchg_label);
 }
 
 static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
@@ -215,8 +209,7 @@ static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
     dfsan_label l6 = ((l3 == CONST_LABEL)? l4 : dfsan_union(l3, l4, 0, 0, 0, 0, UNASSIGNED, UNASSIGNED, arg->src3.addr.id, arg->src3.type)); //l3 is not part of l4, hence union
     set_taint(arg->src3,l6); // edx part of mul/div
 
-    shad_inq flags={.addr.id=FLAG_REG,.type=GLOBAL};
-    set_taint(flags,l4);
+    set_flags(arg->flags,l4);
 
     OUTPUT_ERROR(err,arg,cb3_debug);
 }
@@ -231,8 +224,7 @@ static void taint_cb_JUMP(unsigned int cpu_index, void *udata) {
         OUTPUT_ERROR(jmp_addr,arg,"JUMP *** address 0x%lx is tainted ***");
     }
     if(arg->operation==COND_JMP){
-        shad_inq flags={.addr.id=FLAG_REG,.type=GLOBAL};
-        dfsan_label flags_shadow = get_taint(flags);
+        dfsan_label flags_shadow = get_taint(arg->src2);
         OUTPUT_ERROR(flags_shadow!=0,arg,"JUMP *** flags are tainted ***"); //in fact, this is where we should flip a branch
     }
 }
