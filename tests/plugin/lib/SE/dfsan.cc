@@ -550,6 +550,38 @@ dfsan_dump_labels(int fd) {
     }
 }
 
+//in order to generate the tree graph, install graphviz and run: dot -Tps ./union_graphviz.gv -o union-sample.ps
+
+#define print_vz_node(node, vz_fd) fprintf(vz_fd, "n%03d [label=\"%d\"] ;\n", node,__dfsan_label_info[node].op)
+
+int dfsan_graphviz_traverse(dfsan_label root, FILE *vz_fd, int i) {
+    dfsan_label l1 = __dfsan_label_info[root].l1;
+    dfsan_label l2 = __dfsan_label_info[root].l2;
+
+    int prev_i = 0;
+    if(root!=CONST_LABEL){
+        print_vz_node(i, vz_fd);
+        prev_i = i;
+        if(l1!=CONST_LABEL){
+            fprintf(vz_fd, "n%03d -- n%03d ;\n", i, i+1);
+            i = dfsan_graphviz_traverse(l1,vz_fd, i+1);
+        }
+        if(l2!=CONST_LABEL){
+            fprintf(vz_fd, "n%03d -- n%03d ;\n", prev_i, i+1);
+            i = dfsan_graphviz_traverse(l2,vz_fd,i+1);
+        }
+    }
+    return i;
+}
+
+void dfsan_graphviz(dfsan_label root){
+    FILE * vz_fd = fopen ("union_graphviz.gv", "w+");
+    fprintf(vz_fd, "%s \"\"\n{\n%s cluster%02d\n{\nn%03d ;\n", "graph", "subgraph",1,2);
+    dfsan_graphviz_traverse(root, vz_fd, 2);
+    fprintf(vz_fd, "}\n}\n");
+    fclose(vz_fd);
+}
+
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_fini(char *lfile) {
     if (lfile==NULL || strcmp(lfile, "") == 0) {
         lfile = (char *)dump_labels_at_exit;
@@ -564,6 +596,9 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_fini(char *lfile) {
     dfsan_dump_labels(fd);
     //dump_shadows();
     close(fd);
+
+    dfsan_label root = atomic_load(&__dfsan_last_label, memory_order_relaxed);
+    dfsan_graphviz(root);
 
     // write output
     char *afl_shmid = getenv("__AFL_SHM_ID");
