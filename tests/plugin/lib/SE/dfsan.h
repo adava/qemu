@@ -54,11 +54,11 @@ dfsan_label dfsan_union(dfsan_label l1, dfsan_label l2, u16 op, u8 size, u64 op1
 dfsan_label dfsan_create_label(off_t offset);
 dfsan_label dfsan_get_label(const void *addr);
 
-void dfsan_init(guest_memory_read_func func);
+void dfsan_init(dfsan_settings *funcs);
 // taint source
 void mark_input_bytes(void *addr, int64_t ret, uint8_t value);
 
-void dfsan_fini(char *lfile);
+void dfsan_fini(char *lfile, char *graph_file);
 
 }  // extern "C"
 

@@ -10,7 +10,7 @@
  *   See the COPYING file in the top-level directory.
  */
 
-// run by: ./x86_64-linux-user/qemu-x86_64 -D ./SE_shadow.log -plugin tests/plugin/libSE_labels.so,arg=union_labels.txt [path to binary like ./a.out]
+// run by: ./x86_64-linux-user/qemu-x86_64 -D ./SE_shadow.log -plugin tests/plugin/libSE_labels.so,arg=union_labels.txt,arg=file_graph.vz [path to binary like ./a.out]
 
 #include <inttypes.h>
 #include <assert.h>
@@ -39,11 +39,14 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
 //static bool plugin_optimize=true;
 
-static char *label_file;
+static char *label_file=NULL;
+static char *graph_file=NULL;
 static bool verbose;
 GHashTable *unsupported_ins_log;
 GHashTable *syscall_rets;
 static uint32_t invocation_counter;
+
+static dfsan_settings settings = {.readFunc=&plugin_mem_read,.printInst=&print_X86_instruction};
 
 static inline void analyzeOp(shad_inq *inq, cs_x86_op operand){
     switch(operand.type){
@@ -154,7 +157,7 @@ static void plugin_exit(qemu_plugin_id_t id, void *p)
     g_autofree gchar *report = g_strdup_printf("\nDEBUG output end:\n");
     qemu_plugin_outs(report);
 
-    dfsan_fini(label_file);
+    dfsan_fini(label_file, graph_file);
 
     g_autoptr(GString) end_rep = g_string_new("\n");
     print_unsupported_ins(end_rep,unsupported_ins_log);
@@ -175,7 +178,7 @@ printf("debugging information for 2nd code cache optimization would not be print
     unsupported_ins_log =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     syscall_rets =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     init_register_mapping();
-    dfsan_init(&plugin_mem_read);
+    dfsan_init(&settings);
     invocation_counter = 0;
 #ifdef CONFIG_2nd_CCACHE
     second_ccache_flag = CHECK;
@@ -723,6 +726,9 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
         char *p = argv[i];
         if (i == 0) {
             label_file = strdup(p);
+        }
+        else if (i == 1) {
+            graph_file = strdup(p);
         } else if (strcmp(p, "verbose") == 0) {
             verbose = true;
         }

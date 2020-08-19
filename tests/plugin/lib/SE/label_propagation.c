@@ -297,6 +297,70 @@ static void taint_list_all(void){
     qemu_plugin_outs(report->str);
 }
 
+char imm_buffer[33];
+
+char inst_buffer[64];
+static inline const char *op_text(enum shadow_type type, uint64_t operand){
+    switch(type){
+        case GLOBAL:
+            return Qreg_to_Caps_Name(operand);
+        case IMMEDIATE:
+            sprintf(imm_buffer,"0x%lx",operand);
+            break;
+        case MULTIPLE_OPS:
+            sprintf(imm_buffer,"%s","MULTIOPS");
+            break;
+        case MEMORY:
+            sprintf(imm_buffer,"%s","[MEMORY]");
+            break;
+        default:
+            return NULL;
+    }
+    return (const char*)imm_buffer;
+}
+
+
+static const char *print_X86_instruction(dfsan_label_info *label){
+//    const char *inst_name = GET_INST_NAME(label->op);
+
+    const char *inst_name = get_inst_name(label->op);
+    if(inst_name==NULL){
+        int offset = 0;
+        if ((label->op >= op_start_id) && (label->op < op_end_id)){
+            offset = (int)label->op - (int)Load;
+            inst_name=operator_names[offset];
+            return inst_name;
+        }
+        else{
+            return NULL;
+        }
+    }
+
+    inst_buffer[0] = '\0';
+    sprintf(inst_buffer,"%s\t",inst_name);
+
+
+    const char *op1 = op_text(label->op1_type,label->op1);
+    const char *op2 = op_text(label->op2_type,label->op2);
+    const char *op3 = op_text(label->dest_type,label->dest);
+
+    const char *format = "%s %s";
+
+    if(op3!=NULL){
+        sprintf(inst_buffer,format,inst_buffer,op3);
+        format = "%s, %s";
+    }
+    if(op2!=NULL){
+        sprintf(inst_buffer,format,inst_buffer,op2);
+        format = "%s, %s";
+    }
+    if(op1!=NULL){
+        sprintf(inst_buffer,format,inst_buffer,op1);
+    }
+
+    return inst_buffer;
+}
+
 #ifdef CONFIG_2nd_CCACHE
 static void vcpu_tb_exec(unsigned int cpu_index, void *udata)
 {

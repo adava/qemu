@@ -20,6 +20,8 @@
 //===----------------------------------------------------------------------===//
 #include "dfsan.h"
 
+//#include "../../lib/utility.c"
+
 #include "./sanitizer_common/sanitizer_atomic.h"
 #include "./sanitizer_common/sanitizer_common.h"
 
@@ -58,11 +60,16 @@ using namespace __dfsan;
 typedef atomic_uint32_t atomic_dfsan_label;
 static const dfsan_label kInitializingLabel = -1;
 const char *dump_labels_at_exit = "dfsan_labels.txt";
+const char *graphviz_file = "union_graphviz.gv";
 
 static atomic_dfsan_label __dfsan_last_label;
 static dfsan_label_info *__dfsan_label_info;
 
-static guest_memory_read_func read_guest;
+//static guest_memory_read_func read_guest;
+
+static const char*(*print_inst)(dfsan_label_info *label);
+
+static dfsan_settings *settings;
 
 // Hash table
 static const uptr hashtable_size = (1ULL << 32);
@@ -268,7 +275,7 @@ dfsan_label __taint_union_load(const void *addr, const dfsan_label *ls, uptr n) 
         if (shape_ext) {
             for (uptr i = 0; i < shape_ext; ++i) {
                 char c = '\0';
-                read_guest((uint64_t)(addr + load_size + i),1,(void *)&c); //read it through the set guest function since we don't have direct access (due to emulation)
+                settings->readFunc((uint64_t)(addr + load_size + i),1,(void *)&c); //read it through the set guest function since we don't have direct access (due to emulation)
                 ret = __taint_union(ret, 0, Concat, (load_size + i + 1) * 8, 0, c, UNASSIGNED, IMMEDIATE, 0,
                                     UNASSIGNED);  //sina: keeping track of the constants, and storing them
             }
@@ -550,9 +557,7 @@ dfsan_dump_labels(int fd) {
     }
 }
 
-//in order to generate the tree graph, install graphviz and run: dot -Tps ./union_graphviz.gv -o union-sample.ps
-
-#define print_vz_node(node, vz_fd) fprintf(vz_fd, "n%03d [label=\"%d\"] ;\n", node,__dfsan_label_info[node].op)
+//in order to generate the tree graph, install graphviz and run: dot -Tpng ./union_graphviz.gv -o union-sample.png
 
 int dfsan_graphviz_traverse(dfsan_label root, FILE *vz_fd, int i) {
     dfsan_label l1 = __dfsan_label_info[root].l1;
@@ -560,31 +565,41 @@ int dfsan_graphviz_traverse(dfsan_label root, FILE *vz_fd, int i) {
 
     int prev_i = 0;
     if(root!=CONST_LABEL){
-        print_vz_node(i, vz_fd);
-        prev_i = i;
-        if(l1!=CONST_LABEL){
-            fprintf(vz_fd, "n%03d -- n%03d ;\n", i, i+1);
-            i = dfsan_graphviz_traverse(l1,vz_fd, i+1);
+        char *inst_name = (char *)settings->printInst(&__dfsan_label_info[root]); //GET_INST_NAME(__dfsan_label_info[i].op);
+        if(inst_name!=NULL){
+            fprintf(vz_fd, "n%03d [label=\"%s\"] ;\n", i, inst_name);
         }
-        if(l2!=CONST_LABEL){
+        else{
+            fprintf(vz_fd, "n%03d [label=\"%d\"] ;\n", i, __dfsan_label_info[root].op);
+        }
+        prev_i = i;
+        if(l2!=CONST_LABEL){ //since we first appearing operand (in the instruction) in op2 and l2
             fprintf(vz_fd, "n%03d -- n%03d ;\n", prev_i, i+1);
             i = dfsan_graphviz_traverse(l2,vz_fd,i+1);
+        }
+        if(l1!=CONST_LABEL){
+            fprintf(vz_fd, "n%03d -- n%03d ;\n", prev_i, i+1);
+            i = dfsan_graphviz_traverse(l1,vz_fd, i+1);
         }
     }
     return i;
 }
 
-void dfsan_graphviz(dfsan_label root){
-    FILE * vz_fd = fopen ("union_graphviz.gv", "w+");
+void dfsan_graphviz(dfsan_label root, char *graph_file){
+    printf("INFO: SE: creating graph file to %s, install graphviz and run dot for visualization\n", graph_file);
+    FILE * vz_fd = fopen (graph_file, "w+");
     fprintf(vz_fd, "%s \"\"\n{\n%s cluster%02d\n{\nn%03d ;\n", "graph", "subgraph",1,2);
     dfsan_graphviz_traverse(root, vz_fd, 2);
     fprintf(vz_fd, "}\n}\n");
     fclose(vz_fd);
 }
 
-extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_fini(char *lfile) {
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_fini(char *lfile, char *graph_file) {
     if (lfile==NULL || strcmp(lfile, "") == 0) {
         lfile = (char *)dump_labels_at_exit;
+    }
+    if (graph_file==NULL || strcmp(graph_file, "") == 0) {
+        graph_file = (char *)graphviz_file;
     }
     int fd = open(lfile, O_CREAT | O_WRONLY | O_TRUNC);
     if (fd == -1) {
@@ -598,7 +613,7 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_fini(char *lfile) {
     close(fd);
 
     dfsan_label root = atomic_load(&__dfsan_last_label, memory_order_relaxed);
-    dfsan_graphviz(root);
+    dfsan_graphviz(root, graph_file);
 
     // write output
     char *afl_shmid = getenv("__AFL_SHM_ID");
@@ -611,7 +626,7 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_fini(char *lfile) {
 }
 
 #if SANITIZER_CAN_USE_PREINIT_ARRAY
-extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init(guest_memory_read_func func) {
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init(dfsan_settings *sets) {
 
     __dfsan::kShadowSize = MappingArchImpl<MAPPING_UNION_TABLE_ADDR>() - MappingArchImpl<MAPPING_SHADOW_ADDR>();
     __dfsan::kUnionTableSize = MappingArchImpl<MAPPING_HASH_TABLE_ADDR>() - MappingArchImpl<MAPPING_UNION_TABLE_ADDR>();
@@ -643,14 +658,14 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init(guest_memory_read_func 
 
   SHD_init();
 
-  read_guest = func;
+  settings = sets;
 }
 
 __attribute__((section(".preinit_array"), used))
 static void (*dfsan_init_ptr)(int, char **, char **) = dfsan_init;
 
 #else
-extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init(guest_memory_read_func func) {
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init(dfsan_settings *funcs) {
 
 //  the memory initialization will be done in taint alloc (because of constructors execution order)
     SHD_init();
@@ -661,6 +676,6 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init(guest_memory_read_func 
 
     memset(registers_shadow, 0, GLOBAL_POOL_SIZE * sizeof(dfsan_label));
 
-    read_guest = func;
+    settings = funcs;
 }
 #endif

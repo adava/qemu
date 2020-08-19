@@ -26,8 +26,6 @@
 
 #define op_start_id X86_INS_ENDING + 1 //sina: change to the starting ID to avoid conflict with the ISA
 
-typedef void (*guest_memory_read_func)(uint64_t vaddr, int len, void *buf);
-
 typedef unsigned long uptr;
 typedef uint32_t dfsan_label;
 
@@ -67,8 +65,11 @@ enum operators { //sina: based on capstone capstone/include/x86.h, revise based 
     Concat, //sina: concat of labels and others (label or constant)
     Trunc,  //sina: Truncate a label because only a portion of it will be loaded
     ZExt, //sina:? Zero Extension
-    Nop //a non-cumulative operation to model Valgrind union
+    Nop, //a non-cumulative operation to model Valgrind union
+    op_end_id
 };
+
+const char *operator_names[op_end_id-op_start_id] = {"Load", "Extract", "Concat", "Trunc", "Zero Extend", "Union"};
 
 typedef struct dfsan_label_info {
     dfsan_label l1;
@@ -89,5 +90,14 @@ typedef struct dfsan_label_info {
 } __attribute__((aligned (8))) dfsan_label_info;
 
 dfsan_label registers_shadow[GLOBAL_POOL_SIZE];
+
+typedef void (*guest_memory_read_func)(uint64_t vaddr, int len, void *buf);
+
+typedef const char*(*print_instruction)(dfsan_label_info *label);
+
+typedef struct dfsan_settings{
+    guest_memory_read_func readFunc;
+    print_instruction printInst;
+} dfsan_settings;
 
 #endif /* ! _HAVE_DEFS_H */
