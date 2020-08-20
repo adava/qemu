@@ -97,32 +97,33 @@ static inline inst_callback_argument *analyze_Operands(cs_x86_op *operands,int n
     return res;
 }
 
-static inline qemu_plugin_vcpu_udata_cb_t analyze_LEA_Addr(inst_callback_argument *res, x86_op_mem *mem_op){ //assumes segment would not be tainted
-    if (mem_op->index==X86_REG_INVALID && mem_op->base==X86_REG_INVALID){
-        res->src.type = IMMEDIATE; //deactivate memory callback
-        return taint_cb_clear_all;
-    }
+static inline void analyze_mem_Addr(inst_callback_argument *res, x86_op_mem *mem_op){ //assumes segment would not be tainted
     if (mem_op->index!=X86_REG_INVALID){
         res->src.addr.id = MAP_X86_REGISTER(mem_op->index);
         res->src.size = regsize_map_64[mem_op->index];
         res->src.type = GLOBAL;
 
     }else{
-        res->src.type = IMMEDIATE;
+        res->src.type = UNASSIGNED;
+        res->src.addr.id = 0;
     }
     if (mem_op->base!=X86_REG_INVALID){
         res->src2.addr.id = MAP_X86_REGISTER(mem_op->base);
         res->src2.size = regsize_map_64[mem_op->base];
         res->src2.type = GLOBAL;
     }else{
-        res->src2.type = IMMEDIATE;
+        res->src2.type = UNASSIGNED; 
+        res->src2.type = 0 ;
     }
-//    if (mem_op->scale!=1){
-        res->src3.addr.vaddr = mem_op->scale;
-        res->src3.type = IMMEDIATE;
-        res->src3.size = SHD_SIZE_u32;
-//    }
-    return taint_cb_3ops; //TODO: better to have a separate cb and construct a union type for effective address.
+
+    res->src3.addr.vaddr = mem_op->scale;
+    res->src3.type = IMMEDIATE;
+    res->src3.size = SHD_SIZE_u32;
+
+    res->src4.addr.vaddr = mem_op->disp;
+    res->src4.type = IMMEDIATE;
+    res->src4.size = SHD_SIZE_u32;
+
 }
 
 static void op_mem(unsigned int cpu_index, qemu_plugin_meminfo_t meminfo,
@@ -268,6 +269,17 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
         }
 #endif
         switch(cs_ptr->id){
+            case X86_INS_MOVABS:
+            case X86_INS_MOVZX:
+            case X86_INS_MOVSX:
+            case X86_INS_MOVSXD: //Using Max of src and dst size in taint_cb_2ops handles these operations
+                //these instructions should execute but don't depend on flags
+                if(cb_args->src.size!=cb_args->dst.size){ //otherwise, they act similar to move
+                    cb_args->src2.type = UNASSIGNED;
+                    cb_args->src2.addr.id = 0;
+                    cb = taint_cb_2ops;
+                    break;
+                }
             case X86_INS_MOV:
                 //better to take this outside, and set it to NULL for otherwise case
                 cb_args->src.type==IMMEDIATE?(cb = taint_cb_clear_all):(cb = taint_cb_mov);
@@ -292,15 +304,6 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             /* the above should propagate conditionally. The src is never imm for them so the check below never applies */
                 cb_args->src2.type = GLOBAL_IMPLICIT;
                 cb_args->src2.addr.id = FLAG_REG;
-                cb = taint_cb_2ops;
-                break;
-            case X86_INS_MOVABS:
-            case X86_INS_MOVZX:
-            case X86_INS_MOVSX:
-            case X86_INS_MOVSXD:
-                //these instructions should execute but don't depend on flags
-                cb_args->src2.type = UNASSIGNED;
-                cb_args->src2.addr.id = 0;
                 cb = taint_cb_2ops;
                 break;
             case X86_INS_SHR: //all arithmetics are similar
@@ -469,7 +472,8 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb = taint_cb_MUL_DIV;
                 break;
             case X86_INS_LEA:
-                cb = analyze_LEA_Addr(cb_args,&inst_det->operands[0].mem);
+                analyze_mem_Addr(cb_args,&inst_det->operands[0].mem);
+                cb = taint_cb_effmem;
                 break;
             case X86_INS_SYSCALL: //tainting input is handled in system call cb
                 ALLOC_SET0(cb_args,inst_callback_argument)

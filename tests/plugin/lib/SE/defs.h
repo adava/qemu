@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#if 0
+#if 1
 # define AOUT(...)
 #else
 # define AOUT(...)                                       \
@@ -48,7 +48,8 @@ enum shadow_type{
     MEMORY_IMPLICIT, //for instance Add mem, imm
     IMMEDIATE, //used for SHIFT, this type MUST not be passed to the shadow storage
 //    FLAG, //modeled as part of GLOBAL
-    MULTIPLE_OPS
+    MULTIPLE_OPS,
+    EFFECTIVE_ADDR,
 };
 
 enum operators { //sina: based on capstone capstone/include/x86.h, revise based on the target arch/disassembler
@@ -66,10 +67,10 @@ enum operators { //sina: based on capstone capstone/include/x86.h, revise based 
     Trunc,  //sina: Truncate a label because only a portion of it will be loaded
     ZExt, //sina:? Zero Extension
     Nop, //a non-cumulative operation to model Valgrind union
+    UNION_MULTIPLE_OPS,
+    EFFECTIVE_ADDR_UNION,
     op_end_id
 };
-
-const char *operator_names[op_end_id-op_start_id] = {"Load", "Extract", "Concat", "Trunc", "Zero Extend", "Union"};
 
 typedef struct dfsan_label_info {
     dfsan_label l1;
@@ -99,5 +100,8 @@ typedef struct dfsan_settings{
     guest_memory_read_func readFunc;
     print_instruction printInst;
 } dfsan_settings;
+
+
+//print_instruction operator_printers[op_end_id-op_start_id];
 
 #endif /* ! _HAVE_DEFS_H */

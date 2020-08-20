@@ -36,7 +36,8 @@ typedef struct{
     shad_inq dst;
     instruction_operation operation;
     shad_inq src2;
-    shad_inq src3; //When effective address calculation is needed e.g. LEA, or as a placeholder for an additional source/destination
+    shad_inq src3;
+    shad_inq src4; //When effective address calculation is needed e.g. LEA for disp
     shad_inq flags; //if set, the instruction affects flags, and the final result should be propagated if tainted
     inst_callback_values *vals;
 } inst_callback_argument;

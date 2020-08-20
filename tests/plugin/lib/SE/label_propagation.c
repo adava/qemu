@@ -34,7 +34,7 @@
 #define set_flags(flags,label)  if(flags.type!=UNASSIGNED) {\
                                         set_taint(flags,label);\
                                         }
-
+#define Max(a, b) (((a) > (b)) ? (a) : (b))
 
 static void taint_cb_clear_all(unsigned int cpu_index, void *udata){
     INIT_ARG(arg,udata);
@@ -78,7 +78,7 @@ static void taint_cb_mov2(unsigned int cpu_index, void *udata){
     set_taint(arg->src3,label2);
 }
 
-static void taint_cb_2ops(unsigned int cpu_index, void *udata){ //TODO take care of flags
+static void taint_cb_2ops(unsigned int cpu_index, void *udata){
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_2ops");
 
@@ -91,7 +91,7 @@ static void taint_cb_2ops(unsigned int cpu_index, void *udata){ //TODO take care
 
     dfsan_label dst_label = CONST_LABEL;
     if(l1!=CONST_LABEL || l2!=CONST_LABEL){
-        dst_label = dfsan_union(l1, l2, arg->operation, arg->src.size,
+        dst_label = dfsan_union(l1, l2, arg->operation, arg->dst.size,
                                   arg->src.addr.vaddr, arg->src2.addr.vaddr, arg->src.type, arg->src2.type, arg->dst.addr.vaddr,  arg->dst.type);
     }
     set_taint(arg->dst,dst_label);
@@ -121,16 +121,68 @@ static void taint_cb_3ops(unsigned int cpu_index, void *udata){
     dfsan_label dst_label = CONST_LABEL;
 
     if(l1!=CONST_LABEL || l2!=CONST_LABEL || l3!=CONST_LABEL){
-        l4 = dfsan_union(l2, l3, 0 , 0,
-                                      arg->src2.addr.vaddr, arg->src3.addr.vaddr, arg->src2.type, arg->src3.type, 0, UNASSIGNED); //we need the union regardless of l2/l3 status because dst looks for multiple_ops
-        dst_label = dfsan_union(l1, l4, arg->operation, arg->src.size,
-                                  arg->src.addr.vaddr, 0, arg->src.type, MULTIPLE_OPS, arg->dst.addr.vaddr,  arg->dst.type);
+
+        //if const and implicit, no need to union
+        enum shadow_type src_2_type;
+        uint64_t src2;
+        if((arg->src2.type==GLOBAL_IMPLICIT || arg->src2.type==MEMORY_IMPLICIT) && (l2==CONST_LABEL)){
+            src_2_type = arg->src3.type;
+            src2 = arg->src3.addr.vaddr;
+            l4 = l3;
+        }
+        else if ((arg->src3.type==GLOBAL_IMPLICIT || arg->src3.type==MEMORY_IMPLICIT) && (l3==CONST_LABEL)){
+            src_2_type = arg->src2.type;
+            src2 = arg->src2.addr.vaddr;
+            l4 = l2;
+        }
+        else{
+            l4 = dfsan_union(l2, l3, UNION_MULTIPLE_OPS , 0,
+                             arg->src2.addr.vaddr, arg->src3.addr.vaddr, arg->src2.type, arg->src3.type, 0, UNASSIGNED); //we need the union regardless of l2/l3 status because dst looks for multiple_ops
+            src_2_type = MULTIPLE_OPS;
+            src2 = 0;
+        }
+        dst_label = dfsan_union(l1, l4, arg->operation, arg->dst.size,
+                                  arg->src.addr.vaddr, src2, arg->src.type, src_2_type, arg->dst.addr.vaddr,  arg->dst.type);
     }
     set_taint(arg->dst,dst_label);
 
     set_flags(arg->flags,dst_label);
 
     OUTPUT_ERROR(err,arg,cb_debug);
+}
+
+
+static void taint_cb_effmem(unsigned int cpu_index, void *udata){
+    INIT_ARG(arg,udata); //src=index, src2=base, src3=scale and src4=disp
+
+    dfsan_label l1 = (arg->src.type==IMMEDIATE)?  CONST_LABEL: get_taint(arg->src); //index
+    dfsan_label l2 = (arg->src2.type==IMMEDIATE)? CONST_LABEL: get_taint(arg->src2); //base
+    dfsan_label l3 = CONST_LABEL;
+
+    dfsan_label l4 = CONST_LABEL;
+    dfsan_label l5 = CONST_LABEL;
+    dfsan_label dst_label = CONST_LABEL;
+
+
+    if(l1!=CONST_LABEL || l2!=CONST_LABEL){
+        l3 = dfsan_union(l1, CONST_LABEL, UNION_MULTIPLE_OPS , 0,
+                         arg->src.addr.vaddr, arg->src3.addr.vaddr, arg->src.type, arg->src3.type, 0, UNASSIGNED); //we need the union regardless of l1 status because of MULTIPLE_OPS
+
+        l4 = dfsan_union(l2, CONST_LABEL, UNION_MULTIPLE_OPS , 0,
+                         arg->src2.addr.vaddr, arg->src4.addr.vaddr, arg->src2.type, arg->src4.type, 0, UNASSIGNED); //we need the union regardless of l2 status
+
+
+        l5 = dfsan_union(l3, l4, EFFECTIVE_ADDR_UNION, 0,
+                         0, 0, MULTIPLE_OPS, MULTIPLE_OPS, 0,  UNASSIGNED);
+
+        dst_label = dfsan_union(l5, CONST_LABEL, arg->operation, arg->dst.size,
+                                0, 0, EFFECTIVE_ADDR, UNASSIGNED, arg->dst.addr.vaddr,  arg->dst.type);
+
+    }
+    set_taint(arg->dst,dst_label);
+
+    set_flags(arg->flags,dst_label);
+
 }
 
 
@@ -163,7 +215,7 @@ static void taint_cb_CMPCHG(unsigned int cpu_index, void *udata){
     dfsan_label l3 = get_taint(arg->src2); //eax=dst (if eax!=dst) part that we conservatively propagate (EAX in src2)
     dfsan_label xchg_label = CONST_LABEL;
     if(l1!=CONST_LABEL || l2!=CONST_LABEL || l3!=CONST_LABEL) {
-        dfsan_label l4 =  dfsan_union(l2, l3, 0, 0,
+        dfsan_label l4 =  dfsan_union(l2, l3, UNION_MULTIPLE_OPS, 0,
                                         arg->dst.addr.vaddr, arg->src2.addr.id, arg->dst.type, arg->src2.type, 0, UNASSIGNED);
         xchg_label = dfsan_union(l1, l4, arg->operation, arg->src.size,
                                                arg->src.addr.vaddr, 0, arg->src.type, MULTIPLE_OPS, 0,
@@ -313,23 +365,61 @@ static inline const char *op_text(enum shadow_type type, uint64_t operand){
         case MEMORY:
             sprintf(imm_buffer,"%s","[MEMORY]");
             break;
+        case EFFECTIVE_ADDR:
+            sprintf(imm_buffer,"%s","[$EFF_ADDR]");
+            break;
         default:
             return NULL;
     }
     return (const char*)imm_buffer;
 }
 
+static const char *print_load(dfsan_label_info *label){
+    const char *format = "%s";
+    const char *op2=NULL;
+    const char *op1=NULL;
+    switch (label->op){
+        case Load:
+            sprintf(inst_buffer,"Load(%d)",label->size);
+            break;
+        case Trunc:
+            sprintf(inst_buffer,"Truncate(%d)",label->size);
+            break;
+        case Concat:
+            sprintf(inst_buffer,"Concat");
+            break;
+        case Extract:
+            sprintf(inst_buffer,"Extract(%llu)\t",label->op2);
+            break;
+        case UNION_MULTIPLE_OPS:
+            inst_buffer[0] = '\0'; //for the second sprintf
+            op2 = op_text(label->op2_type,label->op2);
+            if(op2!=NULL){
+                sprintf(inst_buffer,format,op2);
+                format = "%s, %s";
+            }
+            op1 = op_text(label->op1_type,label->op1);
+            if(op1!=NULL){
+                sprintf(inst_buffer,format,inst_buffer,op1);
+            }
+            break;
+        case EFFECTIVE_ADDR_UNION:
+            sprintf(inst_buffer,"left (base+disp) + right (scale*index)\n");
+            break; // LEA reg, [MULTIOPS(base,scale)+op1]
+        default:
+            sprintf(inst_buffer,"%d",label->op);
+            break;
+    }
+    return inst_buffer;
+}
 
 static const char *print_X86_instruction(dfsan_label_info *label){
 //    const char *inst_name = GET_INST_NAME(label->op);
 
     const char *inst_name = get_inst_name(label->op);
     if(inst_name==NULL){
-        int offset = 0;
         if ((label->op >= op_start_id) && (label->op < op_end_id)){
-            offset = (int)label->op - (int)Load;
-            inst_name=operator_names[offset];
-            return inst_name;
+            return print_load(label);
         }
         else{
             return NULL;
@@ -338,22 +428,21 @@ static const char *print_X86_instruction(dfsan_label_info *label){
 
     inst_buffer[0] = '\0';
     sprintf(inst_buffer,"%s\t",inst_name);
-
-
-    const char *op1 = op_text(label->op1_type,label->op1);
-    const char *op2 = op_text(label->op2_type,label->op2);
-    const char *op3 = op_text(label->dest_type,label->dest);
-
     const char *format = "%s %s";
 
+    const char *op3 = op_text(label->dest_type,label->dest);
     if(op3!=NULL){
         sprintf(inst_buffer,format,inst_buffer,op3);
         format = "%s, %s";
     }
+
+    const char *op2 = op_text(label->op2_type,label->op2);
     if(op2!=NULL){
         sprintf(inst_buffer,format,inst_buffer,op2);
         format = "%s, %s";
     }
+
+    const char *op1 = op_text(label->op1_type,label->op1);
     if(op1!=NULL){
         sprintf(inst_buffer,format,inst_buffer,op1);
     }

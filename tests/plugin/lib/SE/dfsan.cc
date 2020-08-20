@@ -181,8 +181,8 @@ dfsan_label __taint_union(dfsan_label l1, dfsan_label l2, u16 op, u16 size,
 //    Swap(l1, l2);
 //    Swap(op1, op2);
 //  }
-    if (l1 == 0 && l2 < CONST_OFFSET /*&& op != fsize*/) return 0; //sina: no fsize at the moment
-    if (l1 == kInitializingLabel || l2 == kInitializingLabel) return kInitializingLabel;
+    if (l1 == 0 && l2 < CONST_OFFSET  && op!=UNION_MULTIPLE_OPS/*&& op != fsize*/) return 0; //sina: no fsize at the moment
+    if ((l1 == kInitializingLabel || l2 == kInitializingLabel) && op!=UNION_MULTIPLE_OPS) return kInitializingLabel;
 
 //  if (l1 >= CONST_OFFSET) op1 = 0;
 //  if (l2 >= CONST_OFFSET) op2 = 0;
@@ -576,7 +576,7 @@ int dfsan_graphviz_traverse(dfsan_label root, FILE *vz_fd, int i) {
             fprintf(vz_fd, "n%03d -- n%03d ;\n", prev_i, i+1);
             i = dfsan_graphviz_traverse(l2,vz_fd,i+1);
         }
-        if(l1!=CONST_LABEL){
+        if(l1!=CONST_LABEL && l1!=l2){
             fprintf(vz_fd, "n%03d -- n%03d ;\n", prev_i, i+1);
             i = dfsan_graphviz_traverse(l1,vz_fd, i+1);
         }
@@ -602,7 +602,7 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_fini(char *lfile, char *grap
     }
     int fd = open(lfile, O_CREAT | O_WRONLY | O_TRUNC);
     if (fd == -1) {
-        printf("WARNING: DataFlowSanitizer: unable to open output file %s\n", dump_labels_at_exit);
+        printf("WARNING: DataFlowSanitizer: unable to open output file %s\n", lfile);
         return;
     }
 
