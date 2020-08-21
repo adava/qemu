@@ -10,7 +10,7 @@
  *   See the COPYING file in the top-level directory.
  */
 
-// run by: ./x86_64-linux-user/qemu-x86_64 -D ./SE_shadow.log -plugin tests/plugin/libSE_labels.so,arg=union_labels.txt,arg=file_graph.vz [path to binary like ./a.out]
+// run by: ./x86_64-linux-user/qemu-x86_64 -d plugin -D ./SE_shadow.log -plugin tests/plugin/libSE_labels.so,arg=union_labels.txt,arg=file_graph.vz [path to binary like ./a.out]
 
 #include <inttypes.h>
 #include <assert.h>
@@ -37,10 +37,13 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
 #define PLUGIN_OPT
 
+#define LOG_ASSEMBLY
+
 //static bool plugin_optimize=true;
 
 static char *label_file=NULL;
 static char *graph_file=NULL;
+//static char *asm_file="program_asm.txt";
 static bool verbose;
 GHashTable *unsupported_ins_log;
 GHashTable *syscall_rets;
@@ -112,7 +115,7 @@ static inline void analyze_mem_Addr(inst_callback_argument *res, x86_op_mem *mem
         res->src2.size = regsize_map_64[mem_op->base];
         res->src2.type = GLOBAL;
     }else{
-        res->src2.type = UNASSIGNED; 
+        res->src2.type = UNASSIGNED;
         res->src2.type = 0 ;
     }
 
@@ -253,6 +256,13 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
         CB_TYPE cbType=AFTER;
         inst_callback_argument *cb_args=NULL;
         cs_insn *cs_ptr = (cs_insn*)cap_plugin_insn_disas(insn);
+
+#ifdef LOG_ASSEMBLY
+        char *ins_str = qemu_plugin_insn_disas(insn);
+        g_autofree gchar *temp_gstr = g_strdup_printf("%s\n",ins_str);
+        qemu_plugin_outs(temp_gstr);
+#endif
+
         cs_x86 *inst_det = &cs_ptr->detail->x86;
 
         qemu_plugin_vcpu_udata_cb_t cb=NULL;
@@ -351,7 +361,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_BSR:
                 cb_args->flags.addr.id=FLAG_REG;
                 cb_args->flags.type=GLOBAL;
-                cb = taint_cb_mov;
+                cb = taint_cb_2ops;
                 break;
             case X86_INS_BT:
             case X86_INS_BTC:

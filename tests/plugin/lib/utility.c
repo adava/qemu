@@ -3,7 +3,7 @@
 //
 #include <capstone.h>
 #include "utility.h"
-#define INVALID_REGISTER X86_REG_ENDING+1
+#define INVALID_REGISTER -1
 #define MAP_X86_REGISTER(CAP_ID) x86_regs_mapping[CAP_ID]
 
 #define MAP_CAPS_ID(QEMU_ID) caps_x86_regs_mapping[QEMU_ID]
@@ -14,7 +14,7 @@ static uint32_t x86_regs_mapping[X86_REG_ENDING] = {INVALID_REGISTER};
 static uint32_t caps_x86_regs_mapping[X86_REG_ENDING] = {INVALID_REGISTER};
 void init_register_mapping(void);
 
-#define NUM_MAPPED_REGISTERS 92
+#define NUM_MAPPED_REGISTERS 116
 const uint32_t caps_x86_regs[NUM_MAPPED_REGISTERS] = {
         X86_REG_AH, // R_AH
         X86_REG_AL, //R_AL
@@ -108,6 +108,30 @@ const uint32_t caps_x86_regs[NUM_MAPPED_REGISTERS] = {
         X86_REG_XMM29,
         X86_REG_XMM30,
         X86_REG_XMM31,
+        X86_REG_R8B, //R_R8
+        X86_REG_R9B, //R_R9
+        X86_REG_R10B, //R_R10
+        X86_REG_R11B, //R_R11
+        X86_REG_R12B, //R_R12
+        X86_REG_R13B, //R_R13
+        X86_REG_R14B, //R_R14
+        X86_REG_R15B, //R_R15
+        X86_REG_R8D, //R_R8
+        X86_REG_R9D, //R_R9
+        X86_REG_R10D, //R_R10
+        X86_REG_R11D, //R_R11
+        X86_REG_R12D, //R_R12
+        X86_REG_R13D, //R_R13
+        X86_REG_R14D, //R_R14
+        X86_REG_R15D, //R_R15
+        X86_REG_R8W, //R_R8
+        X86_REG_R9W, //R_R9
+        X86_REG_R10W, //R_R10
+        X86_REG_R11W, //R_R11
+        X86_REG_R12W, //R_R12
+        X86_REG_R13W, //R_R13
+        X86_REG_R14W, //R_R14
+        X86_REG_R15W, //R_R15
 
 };
 
@@ -204,6 +228,30 @@ const uint32_t qemu_x86_regs[NUM_MAPPED_REGISTERS] = {
         X86_REG_XMM29,
         X86_REG_XMM30,
         X86_REG_XMM31,
+        R_R8,
+        R_R9,
+        R_R10,
+        R_R11,
+        R_R12,
+        R_R13,
+        R_R14,
+        R_R15,
+        R_R8,
+        R_R9,
+        R_R10,
+        R_R11,
+        R_R12,
+        R_R13,
+        R_R14,
+        R_R15,
+        R_R8,
+        R_R9,
+        R_R10,
+        R_R11,
+        R_R12,
+        R_R13,
+        R_R14,
+        R_R15,
 };
 
 void init_register_mapping(void){

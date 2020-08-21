@@ -182,7 +182,7 @@ dfsan_label __taint_union(dfsan_label l1, dfsan_label l2, u16 op, u16 size,
 //    Swap(op1, op2);
 //  }
     if (l1 == 0 && l2 < CONST_OFFSET  && op!=UNION_MULTIPLE_OPS/*&& op != fsize*/) return 0; //sina: no fsize at the moment
-    if ((l1 == kInitializingLabel || l2 == kInitializingLabel) && op!=UNION_MULTIPLE_OPS) return kInitializingLabel;
+    if (l1 == kInitializingLabel || l2 == kInitializingLabel) return kInitializingLabel;
 
 //  if (l1 >= CONST_OFFSET) op1 = 0;
 //  if (l2 >= CONST_OFFSET) op2 = 0;
@@ -429,6 +429,7 @@ dfsan_label dfsan_create_label(off_t offset) {
     __dfsan_label_info[label].size = 1;
     // label may not equal to offset when using stdin
     __dfsan_label_info[label].op1 = offset;
+    __dfsan_label_info[label].op = TAINT;
     return label;
 }
 

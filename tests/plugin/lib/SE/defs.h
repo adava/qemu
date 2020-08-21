@@ -69,6 +69,7 @@ enum operators { //sina: based on capstone capstone/include/x86.h, revise based 
     Nop, //a non-cumulative operation to model Valgrind union
     UNION_MULTIPLE_OPS,
     EFFECTIVE_ADDR_UNION,
+    TAINT,
     op_end_id
 };
 

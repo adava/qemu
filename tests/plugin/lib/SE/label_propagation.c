@@ -406,6 +406,9 @@ static const char *print_load(dfsan_label_info *label){
         case EFFECTIVE_ADDR_UNION:
             sprintf(inst_buffer,"left (base+disp) + right (scale*index)\n");
             break; // LEA reg, [MULTIOPS(base,scale)+op1]
+        case TAINT:
+            sprintf(inst_buffer,"TAINT:%llu\n",label->op1);
+            break;
         default:
             sprintf(inst_buffer,"%d",label->op);
             break;
