@@ -81,6 +81,13 @@ static void taint_cb_mov2(unsigned int cpu_index, void *udata){
 static void taint_cb_2ops(unsigned int cpu_index, void *udata){
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_2ops");
+    shad_inq eip={.size=SHD_SIZE_u64,.type=GLOBAL,.addr.id=R_EIP};
+    uint64_t eip_val=0;
+    if ((int)arg->operation==(int)X86_INS_IMUL){
+        eip_val = 0;
+        READ_VALUE(eip, &eip_val);
+    }
+
 
     dfsan_label l1 = (arg->src.type==IMMEDIATE || arg->src.type==UNASSIGNED)?CONST_LABEL: get_taint(arg->src); //in case of IMUL with 3 ops, the src can be IMM.
     dfsan_label l2 = (arg->src2.type==IMMEDIATE || arg->src2.type==UNASSIGNED)?CONST_LABEL: get_taint(arg->src2);  //for SETcc and MOVcc, type is UNASSIGNED
@@ -97,6 +104,10 @@ static void taint_cb_2ops(unsigned int cpu_index, void *udata){
     set_taint(arg->dst,dst_label);
 
     set_flags(arg->flags,dst_label);
+
+    if ((int)arg->operation==(int)X86_INS_IMUL){
+        printf("MUL/DIV eip=0x%lx, dst_label=%d\n",eip_val,dst_label);
+    }
 
 }
 //support the union of up to three operands
@@ -258,7 +269,7 @@ static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
 
     set_taint(arg->dst,l4); // eax part of mul/div, eax = eax | Mul
 
-    dfsan_label l6 = ((l3 == CONST_LABEL)? l4 : dfsan_union(l3, l4, 0, 0, 0, 0, UNASSIGNED, UNASSIGNED, arg->src3.addr.id, arg->src3.type)); //l3 is not part of l4, hence union
+    dfsan_label l6 = ((l3 == CONST_LABEL)? l4 : dfsan_union(l3, l4, Nop, arg->dst.size, 0, 0, UNASSIGNED, UNASSIGNED, arg->src3.addr.id, arg->src3.type)); //l3 is not part of l4, hence union
     set_taint(arg->src3,l6); // edx part of mul/div
 
     set_flags(arg->flags,l4);

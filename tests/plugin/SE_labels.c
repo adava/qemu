@@ -471,10 +471,13 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_DIV:
                 cb_args->src2.type = GLOBAL_IMPLICIT;
                 cb_args->src2.addr.id = MAP_X86_REGISTER(X86_REG_RAX);
+                cb_args->src2.size = cb_args->src.size;
                 cb_args->src3.type = GLOBAL_IMPLICIT;
                 cb_args->src3.addr.id = MAP_X86_REGISTER(X86_REG_RDX);
+                cb_args->src3.size = cb_args->src.size;
                 cb_args->dst.type = GLOBAL_IMPLICIT;
                 cb_args->dst.addr.id = MAP_X86_REGISTER(X86_REG_RAX);
+                cb_args->dst.size = 2*(cb_args->src.size);
 
                 cb_args->flags.addr.id=FLAG_REG;
                 cb_args->flags.type=GLOBAL;

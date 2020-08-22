@@ -322,10 +322,11 @@ dfsan_label __taint_union_load(const void *addr, const dfsan_label *ls, uptr n) 
                 return __taint_union(label, trunc, Concat, n, 0, 0, UNASSIGNED, UNASSIGNED, 0, UNASSIGNED);
             }
         } else {
-            printf("WARNING: taint mixed with concrete %d\n", i);
+            printf("WARNING: taint mixed with concrete %d, next_label %d, addr=%llx\n", i, next_label, (uint64_t)(addr + i));
             char c = '\0';
             settings->readFunc((uint64_t)(addr + i),1,(void *)&c);//sina: instead of app_for, Qemu guest memory API should be called.
             label = __taint_union(label, 0, Concat, i, 0, c, UNASSIGNED, IMMEDIATE, 0, UNASSIGNED);
+            i++;
         }
     }
     AOUT("\n");
