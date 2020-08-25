@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#if 1
+#if 0
 # define AOUT(...)
 #else
 # define AOUT(...)                                       \
@@ -62,6 +62,7 @@ enum operators { //sina: based on capstone capstone/include/x86.h, revise based 
     Add = X86_INS_ADD,
     Adc = X86_INS_ADC,
     Load = op_start_id, /* from here after, the use is internal in the Load/Store */
+    Load_REG,
     Extract, //sina: a label union with constants copied to a series of bytes
     Concat, //sina: concat of labels and others (label or constant)
     Trunc,  //sina: Truncate a label because only a portion of it will be loaded
@@ -87,18 +88,21 @@ typedef struct dfsan_label_info {
     u8 flags;
     u32 tree_size;
     u32 hash;
-    void* expr;
-    void* deps;
+//    void* expr;
+//    void* deps;
 } __attribute__((aligned (8))) dfsan_label_info;
 
 dfsan_label registers_shadow[GLOBAL_POOL_SIZE];
 
 typedef void (*guest_memory_read_func)(uint64_t vaddr, int len, void *buf);
 
+typedef void (*guest_registers_read_func)(uint32_t reg, int len, void *buf);
+
 typedef const char*(*print_instruction)(dfsan_label_info *label);
 
 typedef struct dfsan_settings{
     guest_memory_read_func readFunc;
+    guest_registers_read_func regValue;
     print_instruction printInst;
 } dfsan_settings;
 

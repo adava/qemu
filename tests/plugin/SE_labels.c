@@ -49,7 +49,7 @@ GHashTable *unsupported_ins_log;
 GHashTable *syscall_rets;
 static uint32_t invocation_counter;
 
-static dfsan_settings settings = {.readFunc=&plugin_mem_read,.printInst=&print_X86_instruction};
+static dfsan_settings settings = {.readFunc=&plugin_mem_read, .regValue=&plugin_reg_read, .printInst=&print_X86_instruction};
 
 static inline void analyzeOp(shad_inq *inq, cs_x86_op operand){
     switch(operand.type){
@@ -253,7 +253,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
         struct qemu_plugin_insn *insn = qemu_plugin_tb_get_insn(tb, i);
         mem_callback_argument *mem_cb_arg = NULL;
         void *usr_data=NULL;
-        CB_TYPE cbType=AFTER;
+        CB_TYPE cbType=BEFORE; //After is too late for Symbolic Execution because the recorded concrete value for cases where destination and source are the same would be wrong
         inst_callback_argument *cb_args=NULL;
         cs_insn *cs_ptr = (cs_insn*)cap_plugin_insn_disas(insn);
 
@@ -669,21 +669,25 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->src.addr.vaddr);
                 mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);
+                cbType = INMEM;
             }
             else if (cb_args->src2.type == MEMORY){ //for instance in CMP or ADC, src shouldn't be MEMORY_IMPLICIT
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->src2.addr.vaddr);
                 mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);
+                cbType = INMEM;
             }
             else if (cb_args->src3.type == MEMORY){ //for instance FP with 3 ops, src3 shouldn't be MEMORY_IMPLICIT
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->src3.addr.vaddr);
                 mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);
+                cbType = INMEM;
             }
             else if (cb_args->dst.type == MEMORY  || cb_args->dst.type == MEMORY_IMPLICIT){ //for instance Push
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->dst.addr.vaddr);
                 mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);
+                cbType = INMEM;
             }
 
         }

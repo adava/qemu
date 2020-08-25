@@ -172,6 +172,37 @@ const dfsan_label *dfsan_shadow_for(const void *addr) {
     return shadow_for(addr);
 }
 
+
+inline dfsan_label concrete_label(u64 operand, enum shadow_type operand_type, u16 size){
+    u64 operand_value = 0;
+    dfsan_label label = 0;
+    if(operand_type==MEMORY || operand_type==MEMORY_IMPLICIT){
+        settings->readFunc(operand,size,&operand_value);
+    }
+    else if(operand_type==GLOBAL || operand_type==GLOBAL_IMPLICIT){
+        settings->regValue(operand,size,&operand_value);
+    }
+    else{
+        AOUT("shouldn't use concrete_label for this operand typ=%d\n",operand_type);
+        assert(0);
+    }
+
+    struct dfsan_label_info label_info = {
+            .l1 = CONST_LABEL, .l2 = CONST_LABEL, .op1 = operand_value, .op1_type=IMMEDIATE, .op2 = 0, .op2_type = UNASSIGNED, .dest = 0, .dest_type = UNASSIGNED, .op = Load_REG, .size = size,
+            .flags = 0, .tree_size = 0, .hash = 0 /*, .expr = nullptr, .deps = nullptr */};
+    __taint::option res = __union_table.lookup(label_info);
+    if (res != __taint::none()) {
+        label = *res;
+        return label;
+    }
+    label = atomic_fetch_add(&__dfsan_last_label, 1, memory_order_relaxed) + 1;
+    dfsan_check_label(label);
+    memcpy(&__dfsan_label_info[label], &label_info, sizeof(dfsan_label_info));
+
+    return label;
+
+}
+
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 dfsan_label __taint_union(dfsan_label l1, dfsan_label l2, u16 op, u16 size,
                           u64 op1, u64 op2, enum shadow_type op1_type, enum shadow_type op2_type, u64 dest,
@@ -182,14 +213,23 @@ dfsan_label __taint_union(dfsan_label l1, dfsan_label l2, u16 op, u16 size,
 //    Swap(op1, op2);
 //  }
     if (l1 == 0 && l2 < CONST_OFFSET  && op!=UNION_MULTIPLE_OPS/*&& op != fsize*/) return 0; //sina: no fsize at the moment
+    if (l2 == 0 && l1 < CONST_OFFSET  && op!=UNION_MULTIPLE_OPS/*&& op != fsize*/) return 0; //because we do not swap
+
     if (l1 == kInitializingLabel || l2 == kInitializingLabel) return kInitializingLabel;
 
 //  if (l1 >= CONST_OFFSET) op1 = 0;
 //  if (l2 >= CONST_OFFSET) op2 = 0;
 
+    if(l1==CONST_LABEL && ((int)op1_type>=(int)GLOBAL && (int)op1_type<=(int)MEMORY_IMPLICIT)){
+        l1 = concrete_label(op1,op1_type,size);
+    }
+    if(l2==CONST_LABEL && ((int)op2_type>=(int)GLOBAL && (int)op2_type<=(int)MEMORY_IMPLICIT)){
+        l2 = concrete_label(op2,op2_type,size);
+    }
+
     struct dfsan_label_info label_info = {
             .l1 = l1, .l2 = l2, .op1 = op1, .op1_type=op1_type, .op2 = op2, .op2_type = op2_type, .dest = dest, .dest_type = dest_type, .op = op, .size = size,
-            .flags = 0, .tree_size = 0, .hash = 0, .expr = nullptr, .deps = nullptr};
+            .flags = 0, .tree_size = 0, .hash = 0 /*, .expr = nullptr, .deps = nullptr */};
 
     __taint::option res = __union_table.lookup(label_info);
     if (res != __taint::none()) {

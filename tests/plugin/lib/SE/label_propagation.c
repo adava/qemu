@@ -105,9 +105,9 @@ static void taint_cb_2ops(unsigned int cpu_index, void *udata){
 
     set_flags(arg->flags,dst_label);
 
-    if ((int)arg->operation==(int)X86_INS_IMUL){
-        printf("MUL/DIV eip=0x%lx, dst_label=%d\n",eip_val,dst_label);
-    }
+//    if ((int)arg->operation==(int)X86_INS_IMUL){ //debugging fot the instructions appearing 5 times in the unrolled loop
+//        printf("MUL/DIV eip=0x%lx, dst_label=%d\n",eip_val,dst_label);
+//    }
 
 }
 //support the union of up to three operands
@@ -147,7 +147,7 @@ static void taint_cb_3ops(unsigned int cpu_index, void *udata){
             l4 = l2;
         }
         else{
-            l4 = dfsan_union(l2, l3, UNION_MULTIPLE_OPS , 0,
+            l4 = dfsan_union(l2, l3, UNION_MULTIPLE_OPS , arg->dst.size,
                              arg->src2.addr.vaddr, arg->src3.addr.vaddr, arg->src2.type, arg->src3.type, 0, UNASSIGNED); //we need the union regardless of l2/l3 status because dst looks for multiple_ops
             src_2_type = MULTIPLE_OPS;
             src2 = 0;
@@ -176,10 +176,10 @@ static void taint_cb_effmem(unsigned int cpu_index, void *udata){
 
 
     if(l1!=CONST_LABEL || l2!=CONST_LABEL){
-        l3 = dfsan_union(l1, CONST_LABEL, UNION_MULTIPLE_OPS , 0,
+        l3 = dfsan_union(l1, CONST_LABEL, UNION_MULTIPLE_OPS , arg->dst.size,
                          arg->src.addr.vaddr, arg->src3.addr.vaddr, arg->src.type, arg->src3.type, 0, UNASSIGNED); //we need the union regardless of l1 status because of MULTIPLE_OPS
 
-        l4 = dfsan_union(l2, CONST_LABEL, UNION_MULTIPLE_OPS , 0,
+        l4 = dfsan_union(l2, CONST_LABEL, UNION_MULTIPLE_OPS , arg->dst.size,
                          arg->src2.addr.vaddr, arg->src4.addr.vaddr, arg->src2.type, arg->src4.type, 0, UNASSIGNED); //we need the union regardless of l2 status
 
 
@@ -226,7 +226,7 @@ static void taint_cb_CMPCHG(unsigned int cpu_index, void *udata){
     dfsan_label l3 = get_taint(arg->src2); //eax=dst (if eax!=dst) part that we conservatively propagate (EAX in src2)
     dfsan_label xchg_label = CONST_LABEL;
     if(l1!=CONST_LABEL || l2!=CONST_LABEL || l3!=CONST_LABEL) {
-        dfsan_label l4 =  dfsan_union(l2, l3, UNION_MULTIPLE_OPS, 0,
+        dfsan_label l4 =  dfsan_union(l2, l3, UNION_MULTIPLE_OPS, arg->dst.size,
                                         arg->dst.addr.vaddr, arg->src2.addr.id, arg->dst.type, arg->src2.type, 0, UNASSIGNED);
         xchg_label = dfsan_union(l1, l4, arg->operation, arg->src.size,
                                                arg->src.addr.vaddr, 0, arg->src.type, MULTIPLE_OPS, 0,
@@ -397,7 +397,7 @@ static const char *print_load(dfsan_label_info *label){
             sprintf(inst_buffer,"Truncate(%d)",label->size);
             break;
         case Concat:
-            sprintf(inst_buffer,"Concat");
+            sprintf(inst_buffer,"Concat(0x%llx)",label->op2);
             break;
         case Extract:
             sprintf(inst_buffer,"Extract(%llu)\t",label->op2);
@@ -419,6 +419,9 @@ static const char *print_load(dfsan_label_info *label){
             break; // LEA reg, [MULTIOPS(base,scale)+op1]
         case TAINT:
             sprintf(inst_buffer,"TAINT:%llu\n",label->op1);
+            break;
+        case Load_REG:
+            sprintf(inst_buffer,"concrete:0x%llx\n",label->op1);
             break;
         default:
             sprintf(inst_buffer,"%d",label->op);

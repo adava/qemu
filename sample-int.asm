@@ -41,7 +41,8 @@ _start:
           push	    rax
 	  xchg	    rax, rbx
 	  and	    rax, 0xffff
-	  test	    rax, 0xffff
+;	  test	    rax, 0xffff
+	  test	    rax, rbx
 	  jne 	    _exit
 	  pop	    rcx
           mul	    cl
