@@ -662,32 +662,29 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 break;
         }
         //register memory callback to get the vaddr if one of the operands is mem (only one operand address would be retrieved that is consistent with x86)
+//#define cmp_src_dst_size(ssize,dsize,op) if(ssize!=dsize){printf("mem_size=%d, dst_size=%d, op=%s\n",ssize,dsize,get_inst_name(op));}
         if (cb_args!=NULL){
             //usr_data should be allocated
             usr_data = (void*)cb_args;
             if (cb_args->src.type == MEMORY || cb_args->src.type == MEMORY_IMPLICIT){ //for instance Pop
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->src.addr.vaddr);
-                mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);
-                cbType = INMEM;
             }
             else if (cb_args->src2.type == MEMORY){ //for instance in CMP or ADC, src shouldn't be MEMORY_IMPLICIT
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->src2.addr.vaddr);
-                mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);
-                cbType = INMEM;
+
             }
             else if (cb_args->src3.type == MEMORY){ //for instance FP with 3 ops, src3 shouldn't be MEMORY_IMPLICIT
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->src3.addr.vaddr);
-                mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);
-                cbType = INMEM;
+
+
             }
             else if (cb_args->dst.type == MEMORY  || cb_args->dst.type == MEMORY_IMPLICIT){ //for instance Push
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
                 mem_cb_arg->addr = &(cb_args->dst.addr.vaddr);
-                mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);
-                cbType = INMEM;
+
             }
 
         }
@@ -695,6 +692,8 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             qemu_plugin_register_vcpu_mem_cb(insn, op_mem,
                                              QEMU_PLUGIN_CB_NO_REGS,
                                              QEMU_PLUGIN_MEM_RW, (void *)mem_cb_arg);
+            mem_cb_arg->ip = qemu_plugin_insn_vaddr(insn);
+            cbType = INMEM;
         }
         //register the selected callback
         if(cb!=NULL && usr_data!=NULL

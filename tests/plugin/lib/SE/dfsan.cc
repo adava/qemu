@@ -260,117 +260,66 @@ dfsan_label __taint_union(dfsan_label l1, dfsan_label l2, u16 op, u16 size,
     return label;
 }
 
+inline const dfsan_label merge_labels(const dfsan_label *ls,int first, int last,const void *addr){
+    dfsan_label ret;
+    dfsan_label label0 = ls[first];
+    int load_size = last - first + 1;
+    if(is_constant_label(label0)){ //since the constants are going to be concatenated with taint in the caller we need to read the concretes
+        assert(load_size<SHD_SIZE_MAX);
+        ret = concrete_label((u64)addr,MEMORY,load_size);
+    }
+    else if(load_size==1){ //no need to union
+        ret = label0;
+    }
+    else if(get_label_info(label0)->op==TAINT){ //a bunch of consecutve tainted bytes
+        ret = __taint_union(label0, (dfsan_label) load_size, Load, load_size, 0, 0, UNASSIGNED, UNASSIGNED, 0, //sina: load_size as l2 doesn't make sense; at least for binary propagation
+                            UNASSIGNED);
+    }
+    else{
+        if(load_size!=get_label_info(label0)->size){ //Truncate
+            ret = __taint_union(label0, CONST_LABEL, Trunc, load_size, get_label_info(label0)->dest, 0, MEMORY,
+                                              UNASSIGNED, 0, UNASSIGNED); //recording the start offset and size to exactly locate the target bytes; assumes the memory offsets are stored in dest
+        }
+        else{
+            ret = label0; //we are reading a perfectly aligned label
+        }
+    }
+    return ret;
+}
+
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 dfsan_label __taint_union_load(const void *addr, const dfsan_label *ls, uptr n) {
-    dfsan_label label0 = ls[0];
-    if (label0 == kInitializingLabel) return kInitializingLabel;
+    int last=0;
+    dfsan_label ret = ls[last];
 
-    // for debugging
-    // dfsan_label l = atomic_load(&__dfsan_last_label, memory_order_relaxed);
-    // assert(label0 <= l);
-    if (label0 >= CONST_OFFSET) assert(get_label_info(label0)->size != 0);
+    if (ret == kInitializingLabel) return kInitializingLabel; //kInitializingLabel is the max, if we reach that value, we ran out of labels
 
-    // fast path 1: constant
-    if (is_constant_label(label0)) {
-        bool constant = true;
-        for (uptr i = 1; i < n; i++) {
-            if (!is_constant_label(ls[i])) {
-                constant = false;
-                break;
+    if (ret >= CONST_OFFSET) assert(get_label_info(ret)->size != 0);
+
+    for (int i=1; i<n;i++){ //can't just compare label size and return, the following bytes might have been overwritten
+        if(ls[last]!=ls[i]){
+            if (ls[i] == kInitializingLabel) return kInitializingLabel;
+
+            if (!(get_label_info(ls[last])->op==TAINT && get_label_info(ls[i])->op==TAINT && get_label_info(ls[last])->op1+(i-last)==get_label_info(ls[i])->op1)){ //check whether they are consecutive raw input bytes
+                dfsan_label temp = merge_labels(ls,last,i-1,addr);
+                if(last==0){
+                    ret = temp;
+                }
+                else{
+                    ret = __taint_union(ret, temp, Concat, i + 1, 0, 0, UNASSIGNED, UNASSIGNED, 0, UNASSIGNED);
+                }
+                last = i;
             }
+            //else continue
         }
-        if (constant) return CONST_LABEL;
+        //else continue
     }
-    AOUT("label0 = %d, n = %d, ls = %p\n", label0, n, ls);
-    // shape
-    bool shape = true;
-    uptr shape_ext = 0;
-    if (__dfsan_label_info[label0].op != 0) {
-        // not raw input bytes
-        shape = false;
-    } else {
-        off_t offset = get_label_info(label0)->op1;
-        for (uptr i = 1; i != n; ++i) {
-            dfsan_label next_label = ls[i];
-            if (next_label == kInitializingLabel) return kInitializingLabel; //sina: ran out of labels
-            else if (next_label == CONST_LABEL) ++shape_ext;
-            else if (get_label_info(next_label)->op1 != offset + i) {
-                shape = false;
-                break;
-            }
-        }
+    if(last!=0){ //the last chunk is not unified
+        dfsan_label temp = merge_labels(ls,last,n-1,addr);
+        ret = __taint_union(ret, temp, Concat, n, 0, 0, UNASSIGNED, UNASSIGNED, 0, UNASSIGNED);
     }
-    if (shape) {
-        if (n == 1) return label0;
-
-        uptr load_size = n - shape_ext; //exclude the constants
-
-        AOUT("shape: label0: %d %d %d\n", label0, load_size, n);
-
-        dfsan_label ret = label0;
-        if (load_size > 1) {
-            ret = __taint_union(label0, (dfsan_label) load_size, Load, load_size, 0, 0, UNASSIGNED, UNASSIGNED, 0,
-                                UNASSIGNED);
-        }
-        if (shape_ext) {
-            for (uptr i = 0; i < shape_ext; ++i) {
-                char c = '\0';
-                settings->readFunc((uint64_t)(addr + load_size + i),1,(void *)&c); //read it through the set guest function since we don't have direct access (due to emulation)
-                ret = __taint_union(ret, 0, Concat, (load_size + i + 1), 0, c, UNASSIGNED, IMMEDIATE, 0,
-                                    UNASSIGNED);  //sina: keeping track of the constants, and storing them
-            }
-        }
-        return ret;
-    }
-
-    // fast path 2: all labels are extracted from a n-size label, then return that label
-    if (is_kind_of_label(label0, Extract)) {
-        dfsan_label parent = get_label_info(label0)->l1;
-        uptr offset = 0;
-        for (uptr i = 0; i < n; i++) {
-            dfsan_label_info *info = get_label_info(ls[i]);
-            if (!is_kind_of_label(ls[i], Extract)
-                || offset != info->op2
-                || parent != info->l1) {
-                break;
-            }
-            offset += info->size;
-        }
-        if (get_label_info(parent)->size == offset) {
-            AOUT("Fast path (2): all labels are extracts: %u\n", parent);
-            return parent;
-        }
-    }
-
-    // slowpath
-    AOUT("union load slowpath at %p\n", __builtin_return_address(0));
-    dfsan_label label = label0;
-    for (uptr i = get_label_info(label0)->size; i < n;) { //sina: here, size is considered to be recorded as byte size unlike Kirenenko!
-        dfsan_label next_label = ls[i];
-        u16 next_size = get_label_info(next_label)->size;
-        AOUT("next label=%u, size=%u\n", next_label, next_size);
-        if (!is_constant_label(next_label)) {
-            if (next_size <= (n - i)) {
-                i += next_size;
-                label = __taint_union(label, next_label, Concat, i, 0, 0, UNASSIGNED, UNASSIGNED, 0,
-                                      UNASSIGNED); //sina: this might be a problem; the operands are not set
-            } else {
-                printf("WARNING: partial loading expected=%d has=%d\n", n - i, next_size);
-                uptr size = n - i;
-                dfsan_label trunc = __taint_union(next_label, CONST_LABEL, Trunc, size, 0, 0, UNASSIGNED,
-                                                  UNASSIGNED, 0, UNASSIGNED);
-                return __taint_union(label, trunc, Concat, n, 0, 0, UNASSIGNED, UNASSIGNED, 0, UNASSIGNED);
-            }
-        } else {
-            printf("WARNING: taint mixed with concrete %d, next_label %d, addr=%llx\n", i, next_label, (uint64_t)(addr + i));
-            char c = '\0';
-            settings->readFunc((uint64_t)(addr + i),1,(void *)&c);//sina: instead of app_for, Qemu guest memory API should be called.
-            label = __taint_union(label, 0, Concat, i, 0, c, UNASSIGNED, IMMEDIATE, 0, UNASSIGNED);
-            i++;
-        }
-    }
-    AOUT("\n");
-    return label;
+    //else all the labels are either the same (could be CONST_LABEL)
+    return ret;
 }
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
@@ -381,67 +330,31 @@ void __taint_union_store(dfsan_label l, dfsan_label *ls, uptr n) {
         dfsan_label h = atomic_load(&__dfsan_last_label, memory_order_relaxed);
         assert(l <= h);
     } else {
-        for (uptr i = 0; i < n; ++i)
-            ls[i] = l;
         return;
     }
-
-    // fast path 1: constant
-    if (l == 0) { //sina: 0 is the value for the constant_label
-        for (uptr i = 0; i < n; ++i)
-            ls[i] = l;
-        return;
-    }
-
-    dfsan_label_info *info = get_label_info(l);
-    // fast path 2: single byte
-    if (n == 1 && info->size == 1) { //info->size is stored in bits
-        ls[0] = l;
-        return;
-    }
-
-    // fast path 3: load
-    if (is_kind_of_label(l,
-                         Load)) { //sina: seems for load, we store the size of the load as the value for l2; see the next comment
-        // if source label is union load, just break it up
-        dfsan_label label0 = info->l1;
-        if (n > info->l2) { //sina: here, we compare l2 value with n that is the store size!
-            printf("WARNING: store size=%u larger than load size=%d\n", n, info->l2);
+    // check how the source label is created
+    switch (__dfsan_label_info[l].op) {
+        case Load: {
+            // if source label is union load, just break it up
+            dfsan_label label0 = __dfsan_label_info[l].l1;
+            uptr s = n < __dfsan_label_info[l].size ? n : __dfsan_label_info[l].size;
+            for (uptr i = 0; i < s; ++i)
+                ls[i] = label0 + i;
+            break;
         }
-        for (uptr i = 0; i < n; ++i)
-            ls[i] = label0 + i;
-        return;
-    }
-
-    // fast path 4: Concat
-    if (is_kind_of_label(l, Concat)) {
-        if (n == info->size) {
-            dfsan_label cur = info->l2; // next label
-            dfsan_label_info *cur_info = get_label_info(cur);
-            // store current
-            __taint_union_store(info->l2, &ls[n - cur_info->size], cur_info->size);
-            // store base
-            __taint_union_store(info->l1, ls, n - cur_info->size);
-            return;
+        case Concat: {
+            dfsan_label left = __dfsan_label_info[l].l1;
+            dfsan_label right = __dfsan_label_info[l].l2;
+            u16 left_size = __dfsan_label_info[left].size;
+            __taint_union_store(left, ls, left_size);
+            __taint_union_store(right, &ls[left_size], n-left_size);
         }
-    }
-
-    // simplify
-    if (is_kind_of_label(l, ZExt)) {
-        dfsan_label orig = info->l1;
-        // if the base size is multiple of byte
-        if ((get_label_info(orig)->size & 0x7) == 0) {
-            for (uptr i = get_label_info(orig)->size; i < n; ++i)
-                ls[i] = 0;
-            __taint_union_store(orig, ls, get_label_info(orig)->size); //sina: this line doesn't make sense; we would repeat the same operation in every iteration. Only ls elements would change that does not seem to affect the outcome
-            return;
+        //we don't have zExt and Extracts
+        default: {
+            for (uptr i = 0; i < n; ++i)
+                ls[i] = l;
+            break;
         }
-    }
-
-    // default fall through
-    for (uptr i = 0; i < n; ++i) {
-        ls[i] = __taint_union(l, CONST_LABEL, Extract, 1, 0, i, IMMEDIATE, IMMEDIATE, 0,
-                              UNASSIGNED); //sina: so we use extract for label and a constant; the union is between two bytes, and we would record the offset from the start in the l2
     }
 }
 
@@ -470,7 +383,7 @@ dfsan_label dfsan_create_label(off_t offset) {
     __dfsan_label_info[label].size = 1;
     // label may not equal to offset when using stdin
     __dfsan_label_info[label].op1 = offset;
-    __dfsan_label_info[label].op = TAINT;
+    __dfsan_label_info[label].op = TAINT; //with the old Kirenenko load/store, this causes problem since there op==0 is expectec
     return label;
 }
 
@@ -614,7 +527,7 @@ int dfsan_graphviz_traverse(dfsan_label root, FILE *vz_fd, int i) {
             fprintf(vz_fd, "n%03d [label=\"%d\"] ;\n", i, __dfsan_label_info[root].op);
         }
         prev_i = i;
-        if(l2!=CONST_LABEL){ //since we first appearing operand (in the instruction) in op2 and l2
+        if(l2!=CONST_LABEL){ //since it is the first appearing operand (in the instruction) in op2 and l2
             fprintf(vz_fd, "n%03d -- n%03d ;\n", prev_i, i+1);
             i = dfsan_graphviz_traverse(l2,vz_fd,i+1);
         }

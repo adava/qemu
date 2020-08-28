@@ -397,7 +397,7 @@ static const char *print_load(dfsan_label_info *label){
             sprintf(inst_buffer,"Truncate(%d)",label->size);
             break;
         case Concat:
-            sprintf(inst_buffer,"Concat(0x%llx)",label->op2);
+            sprintf(inst_buffer,"Concat(0x%llx)",label->size);
             break;
         case Extract:
             sprintf(inst_buffer,"Extract(%llu)\t",label->op2);

@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#if 0
+#if 1
 # define AOUT(...)
 #else
 # define AOUT(...)                                       \
@@ -66,7 +66,7 @@ enum operators { //sina: based on capstone capstone/include/x86.h, revise based 
     Extract, //sina: a label union with constants copied to a series of bytes
     Concat, //sina: concat of labels and others (label or constant)
     Trunc,  //sina: Truncate a label because only a portion of it will be loaded
-    ZExt, //sina:? Zero Extension
+    ZExt, //sina:? Zero Extension; movzx and movsxd in the binary
     Nop, //a non-cumulative operation to model Valgrind union
     UNION_MULTIPLE_OPS,
     EFFECTIVE_ADDR_UNION,
