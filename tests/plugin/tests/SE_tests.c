@@ -137,6 +137,8 @@ void test_dfsan_simple(){
     dfsan_label t1 = dfsan_get_register_label(reg_id);
     assert(t1==l1);
 
+
+    //testing different load scenarios
     void *taint_start_addr = (void *)0x8075f0;
     for(int i=0;i<4;i++){
         dfsan_label lload=dfsan_create_label(pos1++);
@@ -146,12 +148,34 @@ void test_dfsan_simple(){
 
     dfsan_label taint_load = dfsan_read_label(taint_start_addr,4);
     const dfsan_label_info *inf2 = dfsan_get_label_info(taint_load);
-    printf("checking dfsan_get_label_info api op=%d, size=%d, l1=%d, l2=%d, op1=0x%llx, op2=0x%llx:\n",inf2->op,inf2->size,inf2->l1,inf2->l2,inf2->op1,inf2->op2);
+    printf("checking dfsan_get_label_info api returned load=%d op=%d, size=%d, l1=%d, l2=%d, op1=0x%llx, op2=0x%llx:\n",Load,inf2->op,inf2->size,inf2->l1,inf2->l2,inf2->op1,inf2->op2);
+    assert(inf2->op==Load);
 
     dfsan_label taint_concat_concrete = dfsan_read_label(taint_start_addr,8);
     const dfsan_label_info *inf3 = dfsan_get_label_info(taint_concat_concrete);
-    printf("checking dfsan_get_label_info api op=%d, size=%d, l1=%d, l2=%d, op1=0x%llx, op2=0x%llx:\n",inf3->op,inf3->size,inf3->l1,inf3->l2,inf3->op1,inf2->op2);
+    printf("checking taint_load returned concat=%d op=%d, size=%d, l1=%d, l2=%d, op1=0x%llx, op2=0x%llx:\n",Concat,inf3->op,inf3->size,inf3->l1,inf3->l2,inf3->op1,inf3->op2);
+    assert(inf3->op==Concat);
 
+    void *taint_2nd_addr = (void *)0x8075ec;
+    for(int i=0;i<4;i++){
+        dfsan_label lload=dfsan_create_label(pos1++);
+        assert(lload>0);
+        dfsan_set_label(lload,taint_2nd_addr+i,1);
+    }
+    dfsan_label taint_concat_labels = dfsan_read_label(taint_2nd_addr,8);
+    const dfsan_label_info *inf4 = dfsan_get_label_info(taint_concat_labels);
+    printf("checking taint_load returned concat=%d with label=%d op=%d, size=%d, l1=%d, l2=%d, op1=0x%llx, op2=0x%llx:\n",Concat,taint_load,inf4->op,inf4->size,inf4->l1,inf4->l2,inf4->op1,inf4->op2);
+    assert(inf4->op==Concat);
+    assert(inf4->l2==taint_load);
+
+    dfsan_label l5 = dfsan_union(taint_concat_concrete, taint_concat_labels, And, 8);
+    void *taint_3nd_addr = (void *)0x8078d0;
+    dfsan_set_label(l5,taint_3nd_addr,8);
+    dfsan_label taint_trunc = dfsan_read_label(taint_3nd_addr+6,2);
+    const dfsan_label_info *inf5 = dfsan_get_label_info(taint_trunc);
+    printf("checking taint_load returned Truncate=%d with label=%d op=%d, size=%d, l1=%d, l2=%d, op1=0x%llx, op2=0x%llx:\n",Trunc,l5,inf5->op,inf5->size,inf5->l1,inf5->l2,inf5->op1,inf5->op2);
+    assert(inf5->op==Trunc);
+    assert(inf5->l1==l5);
 }
 
 __attribute__((section(".preinit_array")))

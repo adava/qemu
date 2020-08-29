@@ -318,7 +318,10 @@ dfsan_label __taint_union_load(const void *addr, const dfsan_label *ls, uptr n) 
         dfsan_label temp = merge_labels(ls,last,n-1,addr);
         ret = __taint_union(ret, temp, Concat, n, 0, 0, UNASSIGNED, UNASSIGNED, 0, UNASSIGNED);
     }
-    else if(get_label_info(ret)->op==TAINT && n==get_label_info(ls[n-1])->op1-get_label_info(ret)->op1+1){
+    else if(get_label_info(ret)->op==TAINT && n==get_label_info(ls[n-1])->op1-get_label_info(ret)->op1+1){ //aligned Load case
+        ret = merge_labels(ls,last,n-1,addr);
+    }
+    else if(!is_constant_label(ret) && n<get_label_info(ret)->size){ //aligned Truncate case
         ret = merge_labels(ls,last,n-1,addr);
     }
     //else all the labels are the same (could be CONST_LABEL)
