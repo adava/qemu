@@ -272,7 +272,7 @@ inline const dfsan_label merge_labels(const dfsan_label *ls,int first, int last,
         ret = label0;
     }
     else if(get_label_info(label0)->op==TAINT){ //a bunch of consecutve tainted bytes
-        ret = __taint_union(label0, (dfsan_label) load_size, Load, load_size, 0, 0, UNASSIGNED, UNASSIGNED, 0, //sina: load_size as l2 doesn't make sense; at least for binary propagation
+        ret = __taint_union(label0, CONST_LABEL, Load, load_size, 0, 0, UNASSIGNED, UNASSIGNED, 0, //sina: load_size as l2 doesn't make sense; at least for binary propagation
                             UNASSIGNED);
     }
     else{
@@ -318,7 +318,10 @@ dfsan_label __taint_union_load(const void *addr, const dfsan_label *ls, uptr n) 
         dfsan_label temp = merge_labels(ls,last,n-1,addr);
         ret = __taint_union(ret, temp, Concat, n, 0, 0, UNASSIGNED, UNASSIGNED, 0, UNASSIGNED);
     }
-    //else all the labels are either the same (could be CONST_LABEL)
+    else if(get_label_info(ret)->op==TAINT && n==get_label_info(ls[n-1])->op1-get_label_info(ret)->op1+1){
+        ret = merge_labels(ls,last,n-1,addr);
+    }
+    //else all the labels are the same (could be CONST_LABEL)
     return ret;
 }
 
@@ -615,8 +618,8 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init(dfsan_settings *sets) {
   settings = sets;
 }
 
-__attribute__((section(".preinit_array"), used))
-static void (*dfsan_init_ptr)(int, char **, char **) = dfsan_init;
+//__attribute__((section(".preinit_array"), used))
+//static void (*dfsan_init_ptr)(dfsan_settings *) = dfsan_init;
 
 #else
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init(dfsan_settings *funcs) {

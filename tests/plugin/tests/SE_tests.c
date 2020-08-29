@@ -2,8 +2,7 @@
 // Created by sina on 2020-07-08.
 //
 // For testing compile with:
-// gcc  -o dfsan_SE.o  ../../tests/SE_tests.c `pkg-config --cflags glib-2.0` `pkg-config --libs glib-2.0` ./dfsan.o ./taint_allocator.o ./union_util.o ./union_hashtable.o
-
+// gcc  -o dfsan_SE.o  ./tests/SE_tests.c `pkg-config --cflags glib-2.0` `pkg-config --libs glib-2.0` ./lib/SE/dfsan.o ./lib/SE/union_util.o ./lib/SE/union_hashtable.o ./lib/SE/taint_allocator.o
 #define GLOBAL_POOL_SIZE 254
 
 #include <assert.h>
@@ -106,17 +105,17 @@ void test_dfsan_simple(){
 
 
     dfsan_set_label(l1,addr1,sz);
-    dfsan_label l2 = dfsan_read_label(addr1,sz);
+    dfsan_label l2 = dfsan_read_label(addr1,sz); //should simply return the label (not union load)
     int l2_has_l1 = dfsan_has_label(l2, l1);
     printf("testing whether created label is equal to the set label for addr=%p\tl1=%d, l2=%d\n",addr1,l1, l2);
     assert(l2_has_l1);
 
     int l_cnt=dfsan_get_label_count();
     printf("testing whether number of labels is correct:\tlabel count=%d\n",l_cnt);
-    assert(l_cnt==4);
+    assert(l_cnt==1);
 
     const dfsan_label_info *inf1 = dfsan_get_label_info(l2);
-    printf("checking dfsan_get_label_info api:\n");
+    printf("checking dfsan_get_label_info api op=%d, size=%d, op1=0x%llx, op2=0x%llx:\n",inf1->op,inf1->size,inf1->op1,inf1->op2);
 
     dfsan_label l3=dfsan_create_label(pos1);
     assert(l3>0);
@@ -137,14 +136,74 @@ void test_dfsan_simple(){
     dfsan_set_register_label(reg_id, l1);
     dfsan_label t1 = dfsan_get_register_label(reg_id);
     assert(t1==l1);
+
+    void *taint_start_addr = (void *)0x8075f0;
+    for(int i=0;i<4;i++){
+        dfsan_label lload=dfsan_create_label(pos1++);
+        assert(lload>0);
+        dfsan_set_label(lload,taint_start_addr+i,1);
+    }
+
+    dfsan_label taint_load = dfsan_read_label(taint_start_addr,4);
+    const dfsan_label_info *inf2 = dfsan_get_label_info(taint_load);
+    printf("checking dfsan_get_label_info api op=%d, size=%d, l1=%d, l2=%d, op1=0x%llx, op2=0x%llx:\n",inf2->op,inf2->size,inf2->l1,inf2->l2,inf2->op1,inf2->op2);
+
+    dfsan_label taint_concat_concrete = dfsan_read_label(taint_start_addr,8);
+    const dfsan_label_info *inf3 = dfsan_get_label_info(taint_concat_concrete);
+    printf("checking dfsan_get_label_info api op=%d, size=%d, l1=%d, l2=%d, op1=0x%llx, op2=0x%llx:\n",inf3->op,inf3->size,inf3->l1,inf3->l2,inf3->op1,inf2->op2);
+
 }
 
 __attribute__((section(".preinit_array")))
 static void (*dfsan_init_ptr)(void) = dfsan_init;
 
+void mem_read(uint64_t vaddr, int len, void *buf)
+{
+    switch (vaddr){
+        case 0x8075f4:
+            ((char *)buf)[0]=0x0c;
+            break;
+        case 0x700000847600:
+            ((char *)buf)[0]=0xd0;
+            ((char *)buf)[1]=0xf1;
+            ((char *)buf)[2]=0x0f;
+            break;
+        default:
+            ((char *)buf)[0]=0x00;
+            break;
+    }
+}
+
+void reg_read(uint32_t reg, int len, void *buf)
+{
+    switch (reg){
+        case 0x1:
+            ((char *)buf)[0]=0x0d;
+            break;
+        case 0x2:
+            ((char *)buf)[0]=0x01;
+            ((char *)buf)[1]=0xff;
+            break;
+        case 0x3:
+            ((char *)buf)[0]=0x01;
+            ((char *)buf)[1]=0xff;
+            ((char *)buf)[2]=0xc0;
+            ((char *)buf)[1]=0x00;
+            break;
+        default:
+            ((char *)buf)[0]=0x00;
+            break;
+    }
+}
+
+static const char *print_X86_instruction(dfsan_label_info *label){
+    return (const char )"UNIMPLEMENTED";
+}
+
+static dfsan_settings settings = {.readFunc=&mem_read, .regValue=&reg_read, .printInst=&print_X86_instruction};
+
 int main(){
-    SHD_init();
-//    dfsan_init();
+    dfsan_init(&settings);
 //    test_shadow_mem();
     test_dfsan_simple();
     return 0;
