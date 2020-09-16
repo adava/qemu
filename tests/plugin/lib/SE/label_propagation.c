@@ -30,7 +30,7 @@
 #define set_taint(dst,val) \
         if(dst.type==GLOBAL || dst.type==GLOBAL_IMPLICIT){ \
             dfsan_set_register_label(dst.addr.id,val); \
-        } else if(dst.type==MEMORY || dst.type==MEMORY_IMPLICIT) dfsan_set_label(val,(void *)dst.addr.vaddr,dst.size);
+        } else if(dst.type==MEMORY || dst.type==MEMORY_IMPLICIT) dfsan_store_label(val,(void *)dst.addr.vaddr,dst.size);
 #define set_flags(flags,label)  if(flags.type!=UNASSIGNED) {\
                                         set_taint(flags,label);\
                                         }
@@ -389,27 +389,27 @@ static const char *print_load(dfsan_label_info *label){
     const char *format = "%s";
     const char *op2=NULL;
     const char *op1=NULL;
-    switch (label->op){
+    switch (label->instruction.op){
         case Load:
-            sprintf(inst_buffer,"Load(%d)",label->size);
+            sprintf(inst_buffer,"Load(%d)",label->instruction.size);
             break;
         case Trunc:
-            sprintf(inst_buffer,"Truncate(%d)",label->size);
+            sprintf(inst_buffer,"Truncate(%d)",label->instruction.size);
             break;
         case Concat:
-            sprintf(inst_buffer,"Concat(0x%llx)",label->size);
+            sprintf(inst_buffer,"Concat(%d)",label->instruction.size);
             break;
         case Extract:
-            sprintf(inst_buffer,"Extract(%llu)\t",label->op2);
+            sprintf(inst_buffer,"Extract(%llu)\t",label->instruction.op2);
             break;
         case UNION_MULTIPLE_OPS:
             inst_buffer[0] = '\0'; //for the second sprintf
-            op2 = op_text(label->op2_type,label->op2);
+            op2 = op_text(label->instruction.op2_type,label->instruction.op2);
             if(op2!=NULL){
                 sprintf(inst_buffer,format,op2);
                 format = "%s, %s";
             }
-            op1 = op_text(label->op1_type,label->op1);
+            op1 = op_text(label->instruction.op1_type,label->instruction.op1);
             if(op1!=NULL){
                 sprintf(inst_buffer,format,inst_buffer,op1);
             }
@@ -418,13 +418,13 @@ static const char *print_load(dfsan_label_info *label){
             sprintf(inst_buffer,"left (base+disp) + right (scale*index)\n");
             break; // LEA reg, [MULTIOPS(base,scale)+op1]
         case TAINT:
-            sprintf(inst_buffer,"TAINT:%llu\n",label->op1);
+            sprintf(inst_buffer,"TAINT:%llu\n",label->instruction.op1);
             break;
         case Load_REG:
-            sprintf(inst_buffer,"concrete:0x%llx\n",label->op1);
+            sprintf(inst_buffer,"concrete:0x%llx\n",label->instruction.op1);
             break;
         default:
-            sprintf(inst_buffer,"%d",label->op);
+            sprintf(inst_buffer,"%d",label->instruction.op);
             break;
     }
     return inst_buffer;
@@ -433,9 +433,9 @@ static const char *print_load(dfsan_label_info *label){
 static const char *print_X86_instruction(dfsan_label_info *label){
 //    const char *inst_name = GET_INST_NAME(label->op);
 
-    const char *inst_name = get_inst_name(label->op);
+    const char *inst_name = get_inst_name(label->instruction.op);
     if(inst_name==NULL){
-        if ((label->op >= op_start_id) && (label->op < op_end_id)){
+        if ((label->instruction.op >= op_start_id) && (label->instruction.op < op_end_id)){
             return print_load(label);
         }
         else{
@@ -447,19 +447,19 @@ static const char *print_X86_instruction(dfsan_label_info *label){
     sprintf(inst_buffer,"%s\t",inst_name);
     const char *format = "%s %s";
 
-    const char *op3 = op_text(label->dest_type,label->dest);
+    const char *op3 = op_text(label->instruction.dest_type,label->instruction.dest);
     if(op3!=NULL){
         sprintf(inst_buffer,format,inst_buffer,op3);
         format = "%s, %s";
     }
 
-    const char *op2 = op_text(label->op2_type,label->op2);
+    const char *op2 = op_text(label->instruction.op2_type,label->instruction.op2);
     if(op2!=NULL){
         sprintf(inst_buffer,format,inst_buffer,op2);
         format = "%s, %s";
     }
 
-    const char *op1 = op_text(label->op1_type,label->op1);
+    const char *op1 = op_text(label->instruction.op1_type,label->instruction.op1);
     if(op1!=NULL){
         sprintf(inst_buffer,format,inst_buffer,op1);
     }

@@ -43,14 +43,14 @@ bool
 operator==(const dfsan_label_info& lhs, const dfsan_label_info& rhs) {
   return lhs.l1 == rhs.l1
       && lhs.l2 == rhs.l2
-      && lhs.op == rhs.op
-      && lhs.size == rhs.size
-      && lhs.op1 == rhs.op1
-      && lhs.op1_type == rhs.op1_type
-      && lhs.op2 == rhs.op2
-      && lhs.op2_type == rhs.op2_type
-      && lhs.dest == rhs.dest
-      && lhs.dest_type == rhs.dest_type;
+      && lhs.instruction.op == rhs.instruction.op
+      && lhs.instruction.size == rhs.instruction.size
+      && lhs.instruction.op1 == rhs.instruction.op1
+      && lhs.instruction.op1_type == rhs.instruction.op1_type
+      && lhs.instruction.op2 == rhs.instruction.op2
+      && lhs.instruction.op2_type == rhs.instruction.op2_type
+      && lhs.instruction.dest == rhs.instruction.dest
+      && lhs.instruction.dest_type == rhs.instruction.dest_type;
 }
 
 }

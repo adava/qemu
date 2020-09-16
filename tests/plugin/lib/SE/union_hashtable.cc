@@ -17,7 +17,7 @@ union_hashtable::union_hashtable(uint64_t n) {
 
 uint64_t
 union_hashtable::hash(const dfsan_label_info &key) {
-  return ((key.l1 + key.l2 + key.op1 + key.op2) ^ (key.op << 3) ^ key.size) 
+  return ((key.l1 + key.l2 + key.instruction.op1 + key.instruction.op2) ^ (key.instruction.op << 3) ^ key.instruction.size)
       & (bucket_size - 1);
 }
 

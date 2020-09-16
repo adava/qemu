@@ -61,6 +61,9 @@ dfsan_label dfsan_get_label(long data);
 /// Retrieves the label associated with the data at the given address.
 dfsan_label dfsan_read_label(const void *addr, size_t size);
 
+/// Stores the given label at the given address.
+dfsan_label dfsan_store_label(dfsan_label l1, void *addr, uptr size);
+
 /// Retrieves the starting address for the shadow memory of the given address
 const dfsan_label *dfsan_shadow_for(const void * addr);
 

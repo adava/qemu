@@ -36,7 +36,7 @@ SE_LIB_CFLAGS += -fPIC -Wno-unused-but-set-variable -Wno-unused-function
 all: $(SONAMES)
 
 libSE_labels.so: SE_labels.o $(DFSLAN_LIB).o $(UNION_LIB).o $(HASHTABLE_LIB).o $(TAINTALLOC_LIB).o
-	$(CC) -shared -Wl,-soname,$@ -o $@ $^
+	$(CC) -shared -Wl,-soname,$@ -o $@ $^ -lkeystone -lstdc++
 
 $(SE_LIB_DIR)/%.o: $(SE_LIB_DIR)/%.cc
 	$(CXX) $(SE_LIB_CFLAGS) -shared -std=gnu++11 -o $@ $^ `pkg-config --cflags glib-2.0` `pkg-config --libs glib-2.0`

@@ -22,6 +22,7 @@
 #include <glib.h>
 #include <qemu-plugin.h>
 #include <capstone.h>
+#include <keystone/keystone.h>
 #include <stdint.h>
 //#include "lib/shadow_memory.h"
 #include "lib/SE/label_propagation.c"
@@ -169,9 +170,33 @@ static void plugin_exit(qemu_plugin_id_t id, void *p)
     qemu_plugin_outs(end_rep->str);
 }
 
+static void test_ks(void){
+    ks_engine *ks;
+    ks_err err;
+    size_t count; // num of statements as returned by keystone
+    unsigned char *encode;
+    size_t size; //num of compiled bytes as  returned by keystone
+#define CODE "mov rax, 0xfff1"
+    err = ks_open(KS_ARCH_X86, KS_MODE_64, &ks);
+    if (err != KS_ERR_OK) {
+        printf("ERROR: failed on ks_open(), quit\n");
+        assert(0);
+    }
+    if (ks_asm(ks, CODE, 0, &encode, &size, &count) != KS_ERR_OK) {
+        printf("ERROR: ks_asm() failed & count = %lu, error = %u\n",
+               count, ks_errno(ks));
+    } else {
+        printf("successfully assembled!");
+        for (int i = 0; i < size; i++) {
+            printf("%02x ", encode[i]);
+        }
+        printf("\n");
+    }
+}
 
 static void plugin_init(void)
 {
+    printf("Register numbers=%d\n",X86_REG_ENDING);
     g_autoptr(GString) report = g_string_new("Initialization:\n");
 #ifdef CONFIG_2nd_CCACHE
     printf("2nd code cache optimization is activated!\n");
@@ -183,6 +208,9 @@ printf("debugging information for 2nd code cache optimization would not be print
     syscall_rets =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     init_register_mapping();
     dfsan_init(&settings);
+
+    test_ks();
+
     invocation_counter = 0;
 #ifdef CONFIG_2nd_CCACHE
     second_ccache_flag = CHECK;
@@ -269,6 +297,24 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 
         cb_args = analyze_Operands(inst_det->operands,inst_det->op_count);
         cb_args->operation = cs_ptr->id; //sina: record the instruction ID as it appears
+
+#if 0 //testing implicit registers
+        int rr=cs_ptr->detail->regs_read_count;
+        int wr=cs_ptr->detail->regs_write_count;
+        for(int i=0;i<rr;i++){
+            const char *temp1=get_reg_name(cs_ptr->detail->regs_read[i]);
+            if(cs_ptr->detail->regs_read[i]!=X86_REG_EFLAGS && cs_ptr->detail->regs_read[i]!=X86_REG_RSP){
+                printf("inst=%s\tread_reg_name=%s\n",get_inst_name(cs_ptr->id),temp1);
+            }
+        }
+        for(int i=0;i<wr;i++){
+            const char *temp1=get_reg_name(cs_ptr->detail->regs_write[i]);
+            if(cs_ptr->detail->regs_write[i]!=X86_REG_EFLAGS && cs_ptr->detail->regs_write[i]!=X86_REG_RSP){
+                printf("inst=%s\twrite_reg_name=%s\n",get_inst_name(cs_ptr->id),temp1);
+            }
+        }
+#endif
+
 #ifdef CONFIG_2nd_CCACHE
         if (i==0){
             tbIp->ip=qemu_plugin_insn_vaddr(insn);

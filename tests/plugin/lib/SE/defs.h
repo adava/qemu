@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#if 1
+#if 0
 # define AOUT(...)
 #else
 # define AOUT(...)                                       \
@@ -74,9 +74,7 @@ enum operators { //sina: based on capstone capstone/include/x86.h, revise based 
     op_end_id
 };
 
-typedef struct dfsan_label_info {
-    dfsan_label l1;
-    dfsan_label l2;
+typedef struct inst{
     u64 op1;
     enum shadow_type op1_type;
     u64 op2;
@@ -85,10 +83,16 @@ typedef struct dfsan_label_info {
     enum shadow_type dest_type;
     u16 op;
     u16 size;
+} inst;
+
+typedef struct dfsan_label_info {
+    dfsan_label l1;
+    dfsan_label l2;
+    inst instruction;
     u8 flags;
     u32 tree_size;
     u32 hash;
-//    void* expr;
+    void *label_mem; //pointer to an effective address assigned at assembly generation
 //    void* deps;
 } __attribute__((aligned (8))) dfsan_label_info;
 

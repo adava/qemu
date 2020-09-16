@@ -162,7 +162,7 @@ static inline bool is_constant_label(dfsan_label label) {
 }
 
 static inline bool is_kind_of_label(dfsan_label label, u16 kind) {
-    return get_label_info(label)->op == kind;
+    return get_label_info(label)->instruction.op == kind;
 }
 
 static bool isZeroOrPowerOfTwo(uint16_t x) { return (x & (x - 1)) == 0; }
@@ -188,7 +188,7 @@ inline dfsan_label concrete_label(u64 operand, enum shadow_type operand_type, u1
     }
 
     struct dfsan_label_info label_info = {
-            .l1 = CONST_LABEL, .l2 = CONST_LABEL, .op1 = operand_value, .op1_type=IMMEDIATE, .op2 = 0, .op2_type = UNASSIGNED, .dest = 0, .dest_type = UNASSIGNED, .op = Load_REG, .size = size,
+            .l1 = CONST_LABEL, .l2 = CONST_LABEL, .instruction={.op1 = operand_value, .op1_type=IMMEDIATE, .op2 = 0, .op2_type = UNASSIGNED, .dest = 0, .dest_type = UNASSIGNED, .op = Load_REG, .size = size},
             .flags = 0, .tree_size = 0, .hash = 0 /*, .expr = nullptr, .deps = nullptr */};
     __taint::option res = __union_table.lookup(label_info);
     if (res != __taint::none()) {
@@ -228,7 +228,7 @@ dfsan_label __taint_union(dfsan_label l1, dfsan_label l2, u16 op, u16 size,
     }
 
     struct dfsan_label_info label_info = {
-            .l1 = l1, .l2 = l2, .op1 = op1, .op1_type=op1_type, .op2 = op2, .op2_type = op2_type, .dest = dest, .dest_type = dest_type, .op = op, .size = size,
+            .l1 = l1, .l2 = l2, .instruction={.op1 = op1, .op1_type=op1_type, .op2 = op2, .op2_type = op2_type, .dest = dest, .dest_type = dest_type, .op = op, .size = size},
             .flags = 0, .tree_size = 0, .hash = 0 /*, .expr = nullptr, .deps = nullptr */};
 
     __taint::option res = __union_table.lookup(label_info);
@@ -271,13 +271,13 @@ inline const dfsan_label merge_labels(const dfsan_label *ls,int first, int last,
     else if(load_size==1){ //no need to union
         ret = label0;
     }
-    else if(get_label_info(label0)->op==TAINT){ //a bunch of consecutve tainted bytes
+    else if(get_label_info(label0)->instruction.op==TAINT){ //a bunch of consecutve tainted bytes
         ret = __taint_union(label0, CONST_LABEL, Load, load_size, 0, 0, UNASSIGNED, UNASSIGNED, 0, //sina: load_size as l2 doesn't make sense; at least for binary propagation
                             UNASSIGNED);
     }
     else{
-        if(load_size!=get_label_info(label0)->size){ //Truncate
-            ret = __taint_union(label0, CONST_LABEL, Trunc, load_size, get_label_info(label0)->dest, 0, MEMORY,
+        if(load_size!=get_label_info(label0)->instruction.size){ //Truncate, might need to change the condition to <=
+            ret = __taint_union(label0, CONST_LABEL, Trunc, load_size, get_label_info(label0)->instruction.dest, 0, MEMORY,
                                               UNASSIGNED, 0, UNASSIGNED); //recording the start offset and size to exactly locate the target bytes; assumes the memory offsets are stored in dest
         }
         else{
@@ -294,13 +294,13 @@ dfsan_label __taint_union_load(const void *addr, const dfsan_label *ls, uptr n) 
 
     if (ret == kInitializingLabel) return kInitializingLabel; //kInitializingLabel is the max, if we reach that value, we ran out of labels
 
-    if (ret >= CONST_OFFSET) assert(get_label_info(ret)->size != 0);
+    if (ret >= CONST_OFFSET) assert(get_label_info(ret)->instruction.size != 0);
 
     for (int i=1; i<n;i++){ //can't just compare label size and return, the following bytes might have been overwritten
         if(ls[last]!=ls[i]){
             if (ls[i] == kInitializingLabel) return kInitializingLabel;
 
-            if (!(get_label_info(ls[last])->op==TAINT && get_label_info(ls[i])->op==TAINT && get_label_info(ls[last])->op1+(i-last)==get_label_info(ls[i])->op1)){ //check whether they are consecutive raw input bytes
+            if (!(get_label_info(ls[last])->instruction.op==TAINT && get_label_info(ls[i])->instruction.op==TAINT && get_label_info(ls[last])->instruction.op1+(i-last)==get_label_info(ls[i])->instruction.op1)){ //check whether they are consecutive raw input bytes
                 dfsan_label temp = merge_labels(ls,last,i-1,addr);
                 if(last==0){
                     ret = temp;
@@ -318,10 +318,10 @@ dfsan_label __taint_union_load(const void *addr, const dfsan_label *ls, uptr n) 
         dfsan_label temp = merge_labels(ls,last,n-1,addr);
         ret = __taint_union(ret, temp, Concat, n, 0, 0, UNASSIGNED, UNASSIGNED, 0, UNASSIGNED);
     }
-    else if(get_label_info(ret)->op==TAINT && n==get_label_info(ls[n-1])->op1-get_label_info(ret)->op1+1){ //aligned Load case
+    else if(get_label_info(ret)->instruction.op==TAINT && n==get_label_info(ls[n-1])->instruction.op1-get_label_info(ret)->instruction.op1+1){ //aligned Load case
         ret = merge_labels(ls,last,n-1,addr);
     }
-    else if(!is_constant_label(ret) && n<get_label_info(ret)->size){ //aligned Truncate case
+    else if(!is_constant_label(ret) && n<get_label_info(ret)->instruction.size){ //aligned Truncate case
         ret = merge_labels(ls,last,n-1,addr);
     }
     //else all the labels are the same (could be CONST_LABEL)
@@ -330,7 +330,7 @@ dfsan_label __taint_union_load(const void *addr, const dfsan_label *ls, uptr n) 
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
 void __taint_union_store(dfsan_label l, dfsan_label *ls, uptr n) {
-    //AOUT("label = %d, n = %d, ls = %p\n", l, n, ls);
+    AOUT("store label = %d, n = %d, ls = %p\n", l, n, ls);
     if (l != kInitializingLabel) {
         // for debugging
         dfsan_label h = atomic_load(&__dfsan_last_label, memory_order_relaxed);
@@ -339,21 +339,37 @@ void __taint_union_store(dfsan_label l, dfsan_label *ls, uptr n) {
         return;
     }
     // check how the source label is created
-    switch (__dfsan_label_info[l].op) {
+    switch (__dfsan_label_info[l].instruction.op) {
         case Load: {
             // if source label is union load, just break it up
             dfsan_label label0 = __dfsan_label_info[l].l1;
-            uptr s = n < __dfsan_label_info[l].size ? n : __dfsan_label_info[l].size;
+            uptr s = n < __dfsan_label_info[l].instruction.size ? n : __dfsan_label_info[l].instruction.size;
             for (uptr i = 0; i < s; ++i)
                 ls[i] = label0 + i;
             break;
         }
         case Concat: {
+            u16 label_size = __dfsan_label_info[l].instruction.size;
             dfsan_label left = __dfsan_label_info[l].l1;
-            dfsan_label right = __dfsan_label_info[l].l2;
-            u16 left_size = __dfsan_label_info[left].size;
-            __taint_union_store(left, ls, left_size);
-            __taint_union_store(right, &ls[left_size], n-left_size);
+            u16 left_size = __dfsan_label_info[left].instruction.size;
+            if(n==label_size){
+                dfsan_label right = __dfsan_label_info[l].l2;
+                __taint_union_store(left, ls, left_size);
+                __taint_union_store(right, &ls[left_size], n-left_size);
+                break;
+            }
+            else if(n<=left_size){
+                dfsan_label ret = __taint_union(left, CONST_LABEL, Trunc, n, get_label_info(left)->instruction.dest, 0, MEMORY,
+                                                UNASSIGNED, 0, UNASSIGNED);
+                l = ret;
+            }
+            else if(n>left_size && n<label_size){
+                __taint_union_store(left, ls, left_size);
+                dfsan_label right = __dfsan_label_info[l].l2;
+                dfsan_label ret = __taint_union(right, CONST_LABEL, Trunc, n-left_size, get_label_info(right)->instruction.dest, 0, MEMORY,
+                                                UNASSIGNED, 0, UNASSIGNED);
+                l = ret;
+            }
         }
         //we don't have zExt and Extracts
         default: {
@@ -386,10 +402,10 @@ dfsan_label dfsan_create_label(off_t offset) {
             atomic_fetch_add(&__dfsan_last_label, 1, memory_order_relaxed) + 1;
     dfsan_check_label(label);
     memset(&__dfsan_label_info[label], 0, sizeof(dfsan_label_info));
-    __dfsan_label_info[label].size = 1;
+    __dfsan_label_info[label].instruction.size = 1;
     // label may not equal to offset when using stdin
-    __dfsan_label_info[label].op1 = offset;
-    __dfsan_label_info[label].op = TAINT; //with the old Kirenenko load/store, this causes problem since there op==0 is expectec
+    __dfsan_label_info[label].instruction.op1 = offset;
+    __dfsan_label_info[label].instruction.op = TAINT; //with the old Kirenenko load/store, this causes problem since there op==0 is expectec
     return label;
 }
 
@@ -506,10 +522,10 @@ dfsan_dump_labels(int fd) {
     for (uptr l = 1; l <= last_label; ++l) {
         char buf[128];
         snprintf(buf, sizeof(buf), "%u = (%u, %u, %u, %u, %llu, %d, %llu, %d, %llu, %d)\n",
-                 l, __dfsan_label_info[l].l1, __dfsan_label_info[l].l2, __dfsan_label_info[l].op,
-                 __dfsan_label_info[l].size, __dfsan_label_info[l].op1, __dfsan_label_info[l].op1_type,
-                 __dfsan_label_info[l].op2, __dfsan_label_info[l].op2_type, __dfsan_label_info[l].dest,
-                 __dfsan_label_info[l].dest_type);
+                 l, __dfsan_label_info[l].l1, __dfsan_label_info[l].l2, __dfsan_label_info[l].instruction.op,
+                 __dfsan_label_info[l].instruction.size, __dfsan_label_info[l].instruction.op1, __dfsan_label_info[l].instruction.op1_type,
+                 __dfsan_label_info[l].instruction.op2, __dfsan_label_info[l].instruction.op2_type, __dfsan_label_info[l].instruction.dest,
+                 __dfsan_label_info[l].instruction.dest_type);
         for (int i = 0; buf[i] != '\n'; i++) {
             write(fd, &buf[i], 1);
         }
@@ -530,7 +546,7 @@ int dfsan_graphviz_traverse(dfsan_label root, FILE *vz_fd, int i) {
             fprintf(vz_fd, "n%03d [label=\"%s\"] ;\n", i, inst_name);
         }
         else{
-            fprintf(vz_fd, "n%03d [label=\"%d\"] ;\n", i, __dfsan_label_info[root].op);
+            fprintf(vz_fd, "n%03d [label=\"%d\"] ;\n", i, __dfsan_label_info[root].instruction.op);
         }
         prev_i = i;
         if(l2!=CONST_LABEL){ //since it is the first appearing operand (in the instruction) in op2 and l2
@@ -602,7 +618,7 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init(dfsan_settings *sets) {
     __dfsan_label_info = (dfsan_label_info *)UnionTableAddr();
 
     // init const size
-  __dfsan_label_info[CONST_LABEL].size = 1;
+  __dfsan_label_info[CONST_LABEL].instruction.size = 1;
 
 //    MmapFixedNoReserve(HashTableAddr(), hashtable_size); //sina: not sure about this
 
@@ -632,7 +648,7 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_init(dfsan_settings *funcs) 
     __dfsan_label_info = (dfsan_label_info *) UnionTableAddr();
 
     // init const size
-    __dfsan_label_info[CONST_LABEL].size = 1;
+    __dfsan_label_info[CONST_LABEL].instruction.size = 1;
 
     memset(registers_shadow, 0, GLOBAL_POOL_SIZE * sizeof(dfsan_label));
 
