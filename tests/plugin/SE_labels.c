@@ -27,6 +27,8 @@
 //#include "lib/shadow_memory.h"
 #include "lib/SE/label_propagation.c"
 
+#include "lib/SE/asm_generation.h"
+
 #define print_arg(name,src) printf("%s => id=%lu, type=%d\n",name,src.addr.vaddr, src.type)
 
 QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
@@ -40,7 +42,7 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
 #define LOG_ASSEMBLY
 
-#define CONCAT_HELPER "index_abbrv"
+
 //static bool plugin_optimize=true;
 
 static char *label_file=NULL;
@@ -171,43 +173,6 @@ static void plugin_exit(qemu_plugin_id_t id, void *p)
     qemu_plugin_outs(end_rep->str);
 }
 
-static void test_ks(void){
-    ks_engine *ks;
-    ks_err err;
-    size_t count; // num of statements as returned by keystone
-    unsigned char *encode=NULL;
-    size_t size; //num of compiled bytes as  returned by keystone
-#define CODE CONCAT_HELPER":push    rbp;mov     rbp, rsp;mov     [rbp-18h], rdi;mov     [rbp-28h], rdx;mov     eax, ecx;\
-                            mov     edx, r8d;mov     [rbp-38h], r9;mov     [rbp-1ch], si;mov     [rbp-20h], ax;mov     [rbp-2ch], dx;\
-                            movzx   eax, word ptr [rbp-1ch];shl     eax, 3;mov     rdx, [rbp-28h];mov     ecx, eax;shl     rdx, cl;\
-                            mov     rax, rdx;mov     [rbp-10h], rax;mov     rax, [rbp-18h];or      rax, [rbp-10h];mov     [rbp-8], rax;\
-                            movzx   eax, word ptr [rbp-2ch];cmp     eax, 2;jz loc_size_2;cmp     eax, 2;jg loc_size_cmp;\
-                            cmp     eax, 1;jz loc_size_1;jmp loc_4006E3;loc_size_cmp:cmp     eax, 4;jz loc_size_4;\
-                            cmp     eax, 8;jz loc_size_8;jmp loc_4006E3;loc_size_1:mov     rax, [rbp-8];\
-                            mov     edx, eax;mov     rax, [rbp-38h];mov     [rax], dl;jmp loc_4006E3;\
-                            loc_size_2:mov     rax, [rbp-8];mov     edx, eax;mov     rax, [rbp-38h];mov     [rax], dx;\
-                            jmp loc_4006E3;loc_size_4:mov     rax, [rbp-8];mov     edx, eax;mov     rax, [rbp-38h];\
-                            mov     [rax], edx;jmp loc_4006E3;loc_size_8:mov     rdx, [rbp-8];mov     rax, [rbp-38h];\
-                            mov     [rax], rdx;loc_4006E3:pop     rbp;ret;"
-    printf("CONCAT_HELPER:\n");
-    err = ks_open(KS_ARCH_X86, KS_MODE_64, &ks);
-    if (err != KS_ERR_OK) {
-        printf("ERROR: failed on ks_open(), quit\n");
-        assert(0);
-    }
-//    ks_option(ks, KS_OPT_SYNTAX, KS_OPT_SYNTAX_ATT);
-    if (ks_asm(ks, CODE, 0, &encode, &size, &count) != KS_ERR_OK) {
-        printf("ERROR: ks_asm() failed & count = %lu, error = %s\n",
-               count, ks_strerror(ks_errno(ks)));
-    } else {
-        printf("successfully assembled, size=%lu!,count=%lu %p\n",size,count,encode);
-        for (int i = 0; encode!=NULL && (i < size || encode[i]!='\0'); i++) {
-            printf("%02x ", encode[i]);
-        }
-        printf("\n");
-    }
-}
-
 static void plugin_init(void)
 {
     printf("Register numbers=%d\n",X86_REG_ENDING);
@@ -222,8 +187,6 @@ printf("debugging information for 2nd code cache optimization would not be print
     syscall_rets =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     init_register_mapping();
     dfsan_init(&settings);
-
-    test_ks();
 
     invocation_counter = 0;
 #ifdef CONFIG_2nd_CCACHE
