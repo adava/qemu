@@ -99,7 +99,7 @@ void mark_input_bytes(void *addr, int64_t ret, uint8_t value);
 
 void dfsan_init(dfsan_settings *funcs);
 
-void dfsan_fini(char *lfile, char *graph_file);
+int dfsan_fini(char *lfile, char *graph_file);
 
 #ifdef __cplusplus
 }  // extern "C"

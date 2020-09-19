@@ -18,13 +18,8 @@
 // functions are prefixed dfsan_ while the compiler interface functions are
 // prefixed __dfsan_.
 //===----------------------------------------------------------------------===//
-#include "dfsan.h"
 
 //#include "../../lib/utility.c"
-
-#include "./sanitizer_common/sanitizer_atomic.h"
-#include "./sanitizer_common/sanitizer_common.h"
-
 #include <sys/time.h>
 #include <sys/resource.h>
 
@@ -38,24 +33,21 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <string.h>
-
-#include <unordered_map>
-#include <unordered_set>
-#include <utility>
-#include <vector>
-
+#include "asm_generation.h"
 #include "../../../../capstone/include/x86.h"
 #include "../../../../capstone/include/capstone.h"
 //#include "../tainting.h"
 #include "../utility.h"
 #include "defs.h"
+#include "dfsan_interface.h"
 #define MAX_INPUT_SIZE 1024
 #define INVALID_REGISTER -1
 
-#define IS_MEMORY(X) (u16)X==(u16)MEMORY || (u16)X==(u16)MEMORY_IMPLICIT
-#define IS_GLOBAL(X) (u16)X==(u16)GLOBAL || (u16)X==(u16)GLOBAL_IMPLICIT
+#define IS_MEMORY(X) ((((u16)X)==((u16)MEMORY)) || (((u16)X)==((u16)MEMORY_IMPLICIT)))
+#define IS_GLOBAL(X) ((((u16)X)==((u16)GLOBAL)) || (((u16)X)==((u16)GLOBAL_IMPLICIT)))
 #define MAKE_EXPLICIT(X) X=(((u16)X==(u16)GLOBAL_IMPLICIT || (u16)X==(u16)MEMORY_IMPLICIT))?(enum shadow_type)((u16)X-1):X
 
+print_instruction printInst;
 
 typedef struct{
     u64 operand;
@@ -72,7 +64,7 @@ typedef struct{
 //The only external data structure that we need to use is the Capstone x86_op_mem which we will need for effective address handling.
 typedef struct inst_list{
     inst *ins;
-    inst_list *next_inst;
+    struct inst_list *next_inst;
 } inst_list;
 
 inst_list *instructions_head;
@@ -91,7 +83,7 @@ u32 STACK_CURRENT_OFFSET;
 void *CONCAT_HELPER; //func(op1,op1_size,op2,op2_size,concat_size,retaddr) shift op1 op1_size left, and 'or' it with op2 shifted right op2_size. Copy the result to retaddr.
 void *TRUNCATE_HELPER; //func(op,orig_size,trunc_size,retaddr) that would shift operand orig_size-trunc_size left, then shift back right. Copy the result to retaddr.
 
-static void *allocate_from_stack(void){
+static inline void *allocate_from_stack(void){
     x86_op_mem *eff_mem = (x86_op_mem *)malloc(sizeof(x86_op_mem));
     eff_mem->base = R_ESP;
     eff_mem->index = INVALID_REGISTER;
@@ -112,9 +104,6 @@ static inline inst_list *allocate_tail(inst_list *list){
         return list;
     }
 }
-
-typedef void (*guest_memory_read_func)(uint64_t vaddr, int len, void *buf);
-
 /*
  * Solving register collisions:
  * Instead of a "detect and resolve", we completely avoid it by storing the label result somewhere on the stack.
@@ -130,7 +119,7 @@ static inline void add_instruction(inst *instruction){
     instructions_tail=tail_Node;
 }
 
-inline inst_list *create_instruction(u64 op1, enum shadow_type op1_type, u64 op2, enum shadow_type op2_type, u64 dest_op, enum shadow_type dest_type,u16 dest_size,u16 op){
+static inline void create_instruction(u64 op1, enum shadow_type op1_type, u64 op2, enum shadow_type op2_type, u64 dest_op, enum shadow_type dest_type,u16 dest_size,u16 op){
     inst *temp = (inst *)malloc(sizeof(inst));
     temp->op1 = op1;
     temp->op2 = op2;
@@ -143,7 +132,7 @@ inline inst_list *create_instruction(u64 op1, enum shadow_type op1_type, u64 op2
     add_instruction(temp);
 }
 
-inline void mov_from_to(u64 from_op, enum shadow_type from_type, u64 to_op, enum shadow_type to_type, u16 to_size){
+static inline void mov_from_to(u64 from_op, enum shadow_type from_type, u64 to_op, enum shadow_type to_type, u16 to_size){
     if (!IS_MEMORY(from_type) || !IS_MEMORY(to_type)){
         MAKE_EXPLICIT(from_type); //add_operands reject it if otherwise
         MAKE_EXPLICIT(to_type);
@@ -165,7 +154,7 @@ inline void mov_from_to(u64 from_op, enum shadow_type from_type, u64 to_op, enum
 #endif
 }
 
-inline inst_list *create_instruction_label(dfsan_label_info *label){
+static inline void create_instruction_label(dfsan_label_info *label){
     inst *instruction = &(label->instruction);
     add_instruction(instruction);;
     //store the result somewhere on the stack
@@ -209,7 +198,7 @@ static inline void copy_parameter_n(int i, u64 param, enum shadow_type type, u16
  * 4. Call
  * 5. Decrement the stack pointer
 */
-void *callHelperTruncate(u64 operand, u16 orig_size, u16 trunc_size){
+static void *callHelperTruncate(u64 operand, u16 orig_size, u16 trunc_size){
     void *res=allocate_from_stack();
     //prepare the parameters
     copy_parameter_n(1,operand,MEMORY,8);
@@ -225,7 +214,7 @@ void *callHelperTruncate(u64 operand, u16 orig_size, u16 trunc_size){
     return res;
 }
 
-void *callHelperConcat(u64 op1, u16 op1_size, u64 op2, u16 op2_size,u16 concat_size){
+static void *callHelperConcat(u64 op1, u16 op1_size, u64 op2, u16 op2_size,u16 concat_size){
     void *res=allocate_from_stack();
     //prepare the parameters
     copy_parameter_n(1,op1,MEMORY,8);
@@ -243,7 +232,7 @@ void *callHelperConcat(u64 op1, u16 op1_size, u64 op2, u16 op2_size,u16 concat_s
     return res;
 }
 
-inline int add_operands(u64 op1, enum shadow_type op1_type, asm_operand *ret){
+static inline int add_operands(u64 op1, enum shadow_type op1_type, asm_operand *ret){
     int i = 0;
     if(op1_type==MULTIPLE_OPS){
         assert(op1>0);
@@ -262,7 +251,7 @@ inline int add_operands(u64 op1, enum shadow_type op1_type, asm_operand *ret){
     return i;
 }
 
-void merge_ops(u64 op1, enum shadow_type op1_type, u64 op2, enum shadow_type op2_type,multiple_operands *ret){
+static inline void merge_ops(u64 op1, enum shadow_type op1_type, u64 op2, enum shadow_type op2_type,multiple_operands *ret){
     int i,j=0;
 
     i = add_operands(op1,op1_type,&(ret->operands[0]));
@@ -271,7 +260,7 @@ void merge_ops(u64 op1, enum shadow_type op1_type, u64 op2, enum shadow_type op2
     ret->num_operands = i + j;
 }
 
-inline void prepare_operand(dfsan_label label, u64 *op1, enum shadow_type op1_type, u16 size){ //move from label placeholder, instead of the operand itself
+static inline void prepare_operand(dfsan_label label, u64 *op1, enum shadow_type op1_type, u16 size){ //move from label placeholder, instead of the operand itself
     u64 dest = labels[label].instruction.dest;
     u16 dest_type = labels[label].instruction.dest_type;
     if (dest_type==UNION_MULTIPLE_OPS || dest_type==EFFECTIVE_ADDR_UNION){
@@ -288,7 +277,7 @@ inline void prepare_operand(dfsan_label label, u64 *op1, enum shadow_type op1_ty
     //else it is either IMM or not assigned
 }
 
-void generate_asm(int root){
+static void generate_asm(int root){
     struct dfsan_label_info *label = &labels[root];
     if(label->label_mem!=0){
         return; //we already evaluated this label, in another subtree; just use the value stored in label_mem
@@ -360,4 +349,44 @@ void generate_asm(int root){
         //before this line, the transfer between the child dest and the operand should be done; for multiple_ops and effective we need to just copy the pointer while for other types we need a mov instruction
         create_instruction_label(label);
     }
+}
+
+//in order to generate the tree graph, install graphviz and run: dot -Tpng ./union_graphviz.gv -o union-sample.png
+
+int dfsan_graphviz_traverse(dfsan_label root, FILE *vz_fd, int i) {
+    dfsan_label_info *label = (dfsan_label_info*)dfsan_get_label_info(root);
+    dfsan_label l1 = label->l1;
+    dfsan_label l2 = label->l2;
+
+    int prev_i = 0;
+    if(root!=CONST_LABEL){
+        char *inst_name = (char *)printInst(label); //GET_INST_NAME(__dfsan_label_info[i].op);
+        if(inst_name!=NULL){
+            fprintf(vz_fd, "n%03d [label=\"%s\"] ;\n", i, inst_name);
+        }
+        else{
+            fprintf(vz_fd, "n%03d [label=\"%d\"] ;\n", i, label->instruction.op);
+        }
+        prev_i = i;
+        if(l2!=CONST_LABEL){ //since it is the first appearing operand (in the instruction) in op2 and l2
+            fprintf(vz_fd, "n%03d -- n%03d ;\n", prev_i, i+1);
+            i = dfsan_graphviz_traverse(l2,vz_fd,i+1);
+        }
+        if(l1!=CONST_LABEL && l1!=l2){
+            fprintf(vz_fd, "n%03d -- n%03d ;\n", prev_i, i+1);
+            i = dfsan_graphviz_traverse(l1,vz_fd, i+1);
+        }
+    }
+    return i;
+}
+
+void dfsan_graphviz(dfsan_label root, char *graph_file){
+    printf("INFO: SE: root=%d\n",root);
+    printf("INFO: SE: creating graph file to %s, install graphviz and run dot for visualization\n", graph_file);
+    FILE *vz_fd = fopen (graph_file, "w+");
+    assert(vz_fd!=NULL);
+    fprintf(vz_fd, "%s \"\"\n{\n%s cluster%02d\n{\nn%03d ;\n", "graph", "subgraph",1,2);
+    dfsan_graphviz_traverse(root, vz_fd, 2);
+    fprintf(vz_fd, "}\n}\n");
+    fclose(vz_fd);
 }

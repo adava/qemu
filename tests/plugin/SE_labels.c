@@ -27,7 +27,7 @@
 //#include "lib/shadow_memory.h"
 #include "lib/SE/label_propagation.c"
 
-#include "lib/SE/asm_generation.h"
+#include "lib/SE/asm_generation.c"
 
 #define print_arg(name,src) printf("%s => id=%lu, type=%d\n",name,src.addr.vaddr, src.type)
 
@@ -53,7 +53,7 @@ GHashTable *unsupported_ins_log;
 GHashTable *syscall_rets;
 static uint32_t invocation_counter;
 
-static dfsan_settings settings = {.readFunc=&plugin_mem_read, .regValue=&plugin_reg_read, .printInst=&print_X86_instruction};
+static dfsan_settings config = {.readFunc=&plugin_mem_read, .regValue=&plugin_reg_read, .printInst=&print_X86_instruction};
 
 static inline void analyzeOp(shad_inq *inq, cs_x86_op operand){
     switch(operand.type){
@@ -165,8 +165,9 @@ static void plugin_exit(qemu_plugin_id_t id, void *p)
     g_autofree gchar *report = g_strdup_printf("\nDEBUG output end:\n");
     qemu_plugin_outs(report);
 
-    dfsan_fini(label_file, graph_file);
+    int root = dfsan_fini(label_file, graph_file);
 
+    dfsan_graphviz(root,graph_file);
     g_autoptr(GString) end_rep = g_string_new("\n");
     print_unsupported_ins(end_rep,unsupported_ins_log);
     g_string_append_printf(end_rep, "Done\n");
@@ -186,8 +187,8 @@ printf("debugging information for 2nd code cache optimization would not be print
     unsupported_ins_log =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     syscall_rets =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     init_register_mapping();
-    dfsan_init(&settings);
-
+    dfsan_init(&config);
+    printInst = &print_X86_instruction;
     invocation_counter = 0;
 #ifdef CONFIG_2nd_CCACHE
     second_ccache_flag = CHECK;

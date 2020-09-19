@@ -36,7 +36,6 @@
 // Copy declarations from public sanitizer/dfsan_interface.h header here.
 typedef u32 dfsan_label;
 
-
 #define B_FLIPPED 0x1
 
 #ifndef PATH_MAX
@@ -58,7 +57,7 @@ void dfsan_init(dfsan_settings *funcs);
 // taint source
 void mark_input_bytes(void *addr, int64_t ret, uint8_t value);
 
-void dfsan_fini(char *lfile, char *graph_file);
+int dfsan_fini(char *lfile, char *graph_file);
 
 }  // extern "C"
 

@@ -1,8 +1,8 @@
 //
 // Created by sina on 2020-09-18.
 //
-#define CONCAT_HELPER "concat_func"
-#define TRUNC_HELPER "truncate_func"
+#define CONCAT_HELPER_NAME "concat_func"
+#define TRUNC_HELPER_NAME "truncate_func"
 #define CONCAT_HELPER_CODE "push    rbp;mov     rbp, rsp;mov     [rbp-18h], rdi;mov     [rbp-28h], rdx;mov     eax, ecx;\
                             mov     edx, r8d;mov     [rbp-38h], r9;mov     [rbp-1ch], si;mov     [rbp-20h], ax;mov     [rbp-2ch], dx;\
                             movzx   eax, word ptr [rbp-1ch];shl     eax, 3;mov     rdx, [rbp-28h];mov     ecx, eax;shl     rdx, cl;\
@@ -29,4 +29,16 @@
                            mov     rax, [rbp-28h];mov     [rax], edx;jmp    loc_400644;loc_400638:mov     rdx, [rbp-8];mov     rax, [rbp-28h]; \
                            mov     [rax], rdx;loc_400644:pop     rbp;ret;"
 
-#define HELPERS CONCAT_HELPER":"CONCAT_HELPER_CODE""TRUNC_HELPER":"TRUNC_HELPER_CODE
+#define HELPERS CONCAT_HELPER_NAME":"CONCAT_HELPER_CODE""TRUNC_HELPER_NAME":"TRUNC_HELPER_CODE
+
+
+//void *callHelperTruncate(u64 operand, u16 orig_size, u16 trunc_size);
+//
+//void *callHelperConcat(u64 op1, u16 op1_size, u64 op2, u16 op2_size,u16 concat_size);
+
+//void generate_asm(int root);
+
+int dfsan_graphviz_traverse(dfsan_label root, FILE *vz_fd, int i);
+
+void dfsan_graphviz(dfsan_label root, char *graph_file);
+

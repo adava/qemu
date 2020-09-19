@@ -64,7 +64,6 @@ const char *graphviz_file = "union_graphviz.gv";
 
 static atomic_dfsan_label __dfsan_last_label;
 static dfsan_label_info *__dfsan_label_info;
-
 //static guest_memory_read_func read_guest;
 
 static const char*(*print_inst)(dfsan_label_info *label);
@@ -533,63 +532,25 @@ dfsan_dump_labels(int fd) {
     }
 }
 
-//in order to generate the tree graph, install graphviz and run: dot -Tpng ./union_graphviz.gv -o union-sample.png
-
-int dfsan_graphviz_traverse(dfsan_label root, FILE *vz_fd, int i) {
-    dfsan_label l1 = __dfsan_label_info[root].l1;
-    dfsan_label l2 = __dfsan_label_info[root].l2;
-
-    int prev_i = 0;
-    if(root!=CONST_LABEL){
-        char *inst_name = (char *)settings->printInst(&__dfsan_label_info[root]); //GET_INST_NAME(__dfsan_label_info[i].op);
-        if(inst_name!=NULL){
-            fprintf(vz_fd, "n%03d [label=\"%s\"] ;\n", i, inst_name);
-        }
-        else{
-            fprintf(vz_fd, "n%03d [label=\"%d\"] ;\n", i, __dfsan_label_info[root].instruction.op);
-        }
-        prev_i = i;
-        if(l2!=CONST_LABEL){ //since it is the first appearing operand (in the instruction) in op2 and l2
-            fprintf(vz_fd, "n%03d -- n%03d ;\n", prev_i, i+1);
-            i = dfsan_graphviz_traverse(l2,vz_fd,i+1);
-        }
-        if(l1!=CONST_LABEL && l1!=l2){
-            fprintf(vz_fd, "n%03d -- n%03d ;\n", prev_i, i+1);
-            i = dfsan_graphviz_traverse(l1,vz_fd, i+1);
-        }
-    }
-    return i;
-}
-
-void dfsan_graphviz(dfsan_label root, char *graph_file){
-    printf("INFO: SE: creating graph file to %s, install graphviz and run dot for visualization\n", graph_file);
-    FILE * vz_fd = fopen (graph_file, "w+");
-    fprintf(vz_fd, "%s \"\"\n{\n%s cluster%02d\n{\nn%03d ;\n", "graph", "subgraph",1,2);
-    dfsan_graphviz_traverse(root, vz_fd, 2);
-    fprintf(vz_fd, "}\n}\n");
-    fclose(vz_fd);
-}
-
-extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_fini(char *lfile, char *graph_file) {
+extern "C" SANITIZER_INTERFACE_ATTRIBUTE int dfsan_fini(char *lfile, char *graph_file) {
     if (lfile==NULL || strcmp(lfile, "") == 0) {
         lfile = (char *)dump_labels_at_exit;
     }
     if (graph_file==NULL || strcmp(graph_file, "") == 0) {
         graph_file = (char *)graphviz_file;
     }
-    int fd = open(lfile, O_CREAT | O_WRONLY | O_TRUNC);
+    int fd = open(lfile, O_RDWR | O_CREAT | O_TRUNC, 0777);
     if (fd == -1) {
         printf("WARNING: DataFlowSanitizer: unable to open output file %s\n", lfile);
-        return;
+        printf("file open error=%s\n",strerror(errno));
+        assert(0);
     }
-
     printf("INFO: DataFlowSanitizer: dumping labels to %s\n", lfile);
     dfsan_dump_labels(fd);
     //dump_shadows();
     close(fd);
 
     dfsan_label root = atomic_load(&__dfsan_last_label, memory_order_relaxed);
-    dfsan_graphviz(root, graph_file);
 
     // write output
     char *afl_shmid = getenv("__AFL_SHM_ID");
@@ -599,6 +560,7 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE void dfsan_fini(char *lfile, char *grap
         *(reinterpret_cast<u32 *>(trace_id)) = ++__current_index;
         shmdt(trace_id);
     }
+    return (int)root;
 }
 
 #if SANITIZER_CAN_USE_PREINIT_ARRAY
