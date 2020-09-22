@@ -461,7 +461,7 @@ dfsan_get_label(const void *addr) {
 }
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
-const struct dfsan_label_info *dfsan_get_label_info(dfsan_label label) {
+struct dfsan_label_info *dfsan_get_label_info(dfsan_label label) {
     return &__dfsan_label_info[label];
 }
 

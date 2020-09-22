@@ -1,7 +1,12 @@
 //
 // Created by sina on 4/29/20.
 //
+#ifdef TEST_ASM_GENERATION
+#include <capstone/capstone.h>
+#else
 #include <capstone.h>
+#endif
+
 #include "utility.h"
 #define INVALID_REGISTER -1
 #define MAP_X86_REGISTER(CAP_ID) x86_regs_mapping[CAP_ID]
@@ -311,7 +316,9 @@ static inline void print_ops(char *opcode, char *i_dis){
         default:
             g_assert_not_reached();
     }
+#ifndef TEST_ASM_GENERATION
     qemu_plugin_outs(d_str);
+#endif
 }
 
 static inline void print_id_groups(cs_insn *cs_ptr){
@@ -323,8 +330,9 @@ static inline void print_id_groups(cs_insn *cs_ptr){
     else{
         g_string_append_printf(cs_str,"\n");
     }
-
+#ifndef TEST_ASM_GENERATION
     qemu_plugin_outs(cs_str->str);
+#endif
 }
 
 static inline void print_reg_ids_test(GString *end_rep){

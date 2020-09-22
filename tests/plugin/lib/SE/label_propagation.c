@@ -184,7 +184,7 @@ static void taint_cb_effmem(unsigned int cpu_index, void *udata){
 
 
         l5 = dfsan_union(l3, l4, EFFECTIVE_ADDR_UNION, 0,
-                         0, 0, MULTIPLE_OPS, MULTIPLE_OPS, 0,  UNASSIGNED);
+                         0, 0, MULTIPLE_OPS, MULTIPLE_OPS, 0,  EFFECTIVE_ADDR);
 
         dst_label = dfsan_union(l5, CONST_LABEL, arg->operation, arg->dst.size,
                                 0, 0, EFFECTIVE_ADDR, UNASSIGNED, arg->dst.addr.vaddr,  arg->dst.type);

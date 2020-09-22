@@ -71,6 +71,7 @@ enum operators { //sina: based on capstone capstone/include/x86.h, revise based 
     UNION_MULTIPLE_OPS,
     EFFECTIVE_ADDR_UNION,
     TAINT,
+    CALL_HELPER,
     op_end_id
 };
 

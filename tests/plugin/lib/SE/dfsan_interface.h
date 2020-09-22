@@ -68,7 +68,7 @@ dfsan_label dfsan_store_label(dfsan_label l1, void *addr, uptr size);
 const dfsan_label *dfsan_shadow_for(const void * addr);
 
 /// Retrieves a pointer to the dfsan_label_info struct for the given label.
-const dfsan_label_info *dfsan_get_label_info(dfsan_label label);
+dfsan_label_info *dfsan_get_label_info(dfsan_label label);
 
 /// Returns whether the given label label contains the label elem.
 int dfsan_has_label(dfsan_label label, dfsan_label elem);
