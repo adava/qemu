@@ -188,7 +188,7 @@ inline dfsan_label concrete_label(u64 operand, enum shadow_type operand_type, u1
 
     struct dfsan_label_info label_info = {
             .l1 = CONST_LABEL, .l2 = CONST_LABEL, .instruction={.op1 = operand_value, .op1_type=IMMEDIATE, .op2 = 0, .op2_type = UNASSIGNED, .dest = 0, .dest_type = UNASSIGNED, .op = Load_REG, .size = size},
-            .flags = 0, .tree_size = 0, .hash = 0 /*, .expr = nullptr, .deps = nullptr */};
+            .flags = 0, .tree_size = 0, .hash = 0 /*, .expr = nullptr, .deps = nullptr */}; //we don't assign op2 and dest to avoid many duplicate IMM values in the union table
     __taint::option res = __union_table.lookup(label_info);
     if (res != __taint::none()) {
         label = *res;
@@ -219,13 +219,22 @@ dfsan_label __taint_union(dfsan_label l1, dfsan_label l2, u16 op, u16 size,
 //  if (l1 >= CONST_OFFSET) op1 = 0;
 //  if (l2 >= CONST_OFFSET) op2 = 0;
 
+    if(IS_MEMORY(op1_type)){
+        op1 = 0; //memory addr will be decided later
+    }
+    if(IS_MEMORY(op2_type)){
+        op2 = 0;
+    }
+    if(IS_MEMORY(dest_type)){
+        dest = 0;
+    }
+
     if(l1==CONST_LABEL && ((int)op1_type>=(int)GLOBAL && (int)op1_type<=(int)MEMORY_IMPLICIT)){
         l1 = concrete_label(op1,op1_type,size);
     }
     if(l2==CONST_LABEL && ((int)op2_type>=(int)GLOBAL && (int)op2_type<=(int)MEMORY_IMPLICIT)){
         l2 = concrete_label(op2,op2_type,size);
     }
-
     struct dfsan_label_info label_info = {
             .l1 = l1, .l2 = l2, .instruction={.op1 = op1, .op1_type=op1_type, .op2 = op2, .op2_type = op2_type, .dest = dest, .dest_type = dest_type, .op = op, .size = size},
             .flags = 0, .tree_size = 0, .hash = 0 /*, .expr = nullptr, .deps = nullptr */};

@@ -26,6 +26,9 @@
 
 #define op_start_id X86_INS_ENDING + 1 //sina: change to the starting ID to avoid conflict with the ISA
 
+#define IS_MEMORY(X) ((((u16)X)==((u16)MEMORY)) || (((u16)X)==((u16)MEMORY_IMPLICIT)))
+#define IS_GLOBAL(X) ((((u16)X)==((u16)GLOBAL)) || (((u16)X)==((u16)GLOBAL_IMPLICIT)))
+
 typedef unsigned long uptr;
 typedef uint32_t dfsan_label;
 
@@ -103,7 +106,7 @@ typedef void (*guest_memory_read_func)(uint64_t vaddr, int len, void *buf);
 
 typedef void (*guest_registers_read_func)(uint32_t reg, int len, void *buf);
 
-typedef const char*(*print_instruction)(dfsan_label_info *label);
+typedef const char*(*print_instruction)(inst *inst);
 
 typedef struct dfsan_settings{
     guest_memory_read_func readFunc;

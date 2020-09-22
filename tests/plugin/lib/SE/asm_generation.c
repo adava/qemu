@@ -44,8 +44,6 @@
 #define MAX_INPUT_SIZE 1024
 #define INVALID_REGISTER -1
 
-#define IS_MEMORY(X) ((((u16)X)==((u16)MEMORY)) || (((u16)X)==((u16)MEMORY_IMPLICIT)))
-#define IS_GLOBAL(X) ((((u16)X)==((u16)GLOBAL)) || (((u16)X)==((u16)GLOBAL_IMPLICIT)))
 #define MAKE_EXPLICIT(X) X=(((u16)X==(u16)GLOBAL_IMPLICIT || (u16)X==(u16)MEMORY_IMPLICIT))?(enum shadow_type)((u16)X-1):X
 
 print_instruction printInst;
@@ -296,10 +294,10 @@ static inline void prepare_operand(dfsan_label label, u64 *op1, enum shadow_type
         assert(dest_type == op1_type);
         *op1 = dest;
     } else if (IS_MEMORY(op1_type)) { //no need to move, just use the pointer to the label effective address
-        *op1 = dest; //op1 now has
+        *op1 = (u64)labelInfo->label_mem; //op1 now points to the same memory; we avoid copying TAIN, LOAD etc. around
     } else if (IS_GLOBAL(op1_type)) { //we have to move
         mov_from_to((u64) labelInfo->label_mem, MEMORY, *op1, op1_type,
-                    size,0); //Note that even memory loads(Load, Taint, Concat) would be handled correctly this way
+                    size,0); //Note that even memory loads(Load, Taint, Concat) and Load_REG would be handled correctly this way
     }
     //else it is either IMM or not assigned
 }
@@ -327,6 +325,7 @@ static void generate_asm(int root) {
                 label->label_mem = allocate_from_stack(8);
                 mov_from_to(label->instruction.op1, label->instruction.op1_type, (u64) label->label_mem, MEMORY,
                             label->instruction.size,0);
+                label->instruction.dest = (u64) label->label_mem;
                 break;
             case TAINT:
                 label->label_mem = taints[label->instruction.op1]; //op1 is expected to have the legit offset
@@ -358,6 +357,7 @@ static void generate_asm(int root) {
                           label->instruction.op2_type, ret);
                 assert(ret->num_operands > 0);
                 label->instruction.dest = (u64) ret;
+                label->label_mem = (void *)ret;
                 break;
             }
                 //would need register occupation because they would be immediately used; we occupy them in the caller
@@ -370,6 +370,7 @@ static void generate_asm(int root) {
                 eff_mem->base = l2_label->instruction.op1;
                 eff_mem->disp = l2_label->instruction.op2;
                 label->instruction.dest = (u64) eff_mem;
+                label->label_mem = (void *)eff_mem;
                 break;
             }
             case Nop:
@@ -385,16 +386,24 @@ static void generate_asm(int root) {
     }
 }
 
+static void print_asm_instructions(void){
+    for(inst_list *temp=instructions_head;temp!=NULL;temp=temp->next_inst){
+        const char *asm_ins_txt=print_X86_instruction(temp->ins);
+        assert(asm_ins_txt!=NULL);
+        printf("%s\n",asm_ins_txt);
+    }
+}
+
 //in order to generate the tree graph, install graphviz and run: dot -Tpng ./union_graphviz.gv -o union-sample.png
 
 int dfsan_graphviz_traverse(dfsan_label root, FILE *vz_fd, int i) {
-    dfsan_label_info *label = (dfsan_label_info *) dfsan_get_label_info(root);
-    dfsan_label l1 = label->l1;
-    dfsan_label l2 = label->l2;
-
     int prev_i = 0;
     if (root != CONST_LABEL) {
-        char *inst_name = (char *) printInst(label); //GET_INST_NAME(__dfsan_label_info[i].op);
+        dfsan_label_info *label = (dfsan_label_info *) dfsan_get_label_info(root);
+        printf("in dfsan_graphviz_traverse, label_ptr=%p\n",label);
+        dfsan_label l1 = label->l1;
+        dfsan_label l2 = label->l2;
+        char *inst_name = (char *) printInst(&(label->instruction)); //GET_INST_NAME(__dfsan_label_info[i].op);
         if (inst_name != NULL) {
             fprintf(vz_fd, "n%03d [label=\"%s\"] ;\n", i, inst_name);
         } else {

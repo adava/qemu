@@ -363,6 +363,40 @@ static void taint_list_all(void){
 char imm_buffer[33];
 
 char inst_buffer[64];
+static inline const char *mem_text(x86_op_mem *eff_addr){ //[base + (index*scale) + disp]
+    char index_scale[20]={'\0'}; //10 int chars + '*' + three reg identifier chars + '\0'
+    const char *base = eff_addr->base!=-1?Qreg_to_Caps_Name(eff_addr->base):"";
+    imm_buffer[0]='[';
+    imm_buffer[1]= '\0';
+    if(eff_addr->index!=-1){
+        if(eff_addr->scale!=1){
+            sprintf(index_scale,"%s*%d",Qreg_to_Caps_Name(eff_addr->index),eff_addr->scale);
+        }
+        else{
+            sprintf(index_scale,"%s",Qreg_to_Caps_Name(eff_addr->index));
+        }
+    }
+    if(eff_addr->base!=-1){
+        sprintf(imm_buffer,"%s%s",imm_buffer,base);
+    }
+    if(eff_addr->index!=-1){
+        if(eff_addr->base!=-1){
+            sprintf(imm_buffer,"%s + %s",imm_buffer,index_scale);
+        }
+        else{
+            sprintf(imm_buffer,"%s %s",imm_buffer,index_scale);
+        }
+    }
+    if(eff_addr->disp){
+        sprintf(imm_buffer,"%s%s%ld]",imm_buffer,eff_addr->disp>0?"+":"",eff_addr->disp);
+
+    }
+    else{
+        sprintf(imm_buffer,"%s%s",imm_buffer,"]");
+    }
+    return (const char*)imm_buffer;;
+}
+
 static inline const char *op_text(enum shadow_type type, uint64_t operand){
     switch(type){
         case GLOBAL:
@@ -374,10 +408,13 @@ static inline const char *op_text(enum shadow_type type, uint64_t operand){
             sprintf(imm_buffer,"%s","MULTIOPS");
             break;
         case MEMORY:
-            sprintf(imm_buffer,"%s","[MEMORY]");
-            break;
         case EFFECTIVE_ADDR:
-            sprintf(imm_buffer,"%s","[$EFF_ADDR]");
+            if(operand!=0){
+                return mem_text((x86_op_mem *)operand);
+            }
+            else{
+                sprintf(imm_buffer,"%s",type==MEMORY?"[MEMORY]":"[$EFF_ADDR]");
+            }
             break;
         default:
             return NULL;
@@ -385,31 +422,31 @@ static inline const char *op_text(enum shadow_type type, uint64_t operand){
     return (const char*)imm_buffer;
 }
 
-static const char *print_load(dfsan_label_info *label){
+static const char *print_load(inst *instruction){
     const char *format = "%s";
     const char *op2=NULL;
     const char *op1=NULL;
-    switch (label->instruction.op){
+    switch (instruction->op){
         case Load:
-            sprintf(inst_buffer,"Load(%d)",label->instruction.size);
+            sprintf(inst_buffer,"Load(%d)",instruction->size);
             break;
         case Trunc:
-            sprintf(inst_buffer,"Truncate(%d)",label->instruction.size);
+            sprintf(inst_buffer,"Truncate(%d)",instruction->size);
             break;
         case Concat:
-            sprintf(inst_buffer,"Concat(%d)",label->instruction.size);
+            sprintf(inst_buffer,"Concat(%d)",instruction->size);
             break;
         case Extract:
-            sprintf(inst_buffer,"Extract(%llu)\t",label->instruction.op2);
+            sprintf(inst_buffer,"Extract(%llu)\t",instruction->op2);
             break;
         case UNION_MULTIPLE_OPS:
             inst_buffer[0] = '\0'; //for the second sprintf
-            op2 = op_text(label->instruction.op2_type,label->instruction.op2);
+            op2 = op_text(instruction->op2_type,instruction->op2);
             if(op2!=NULL){
                 sprintf(inst_buffer,format,op2);
                 format = "%s, %s";
             }
-            op1 = op_text(label->instruction.op1_type,label->instruction.op1);
+            op1 = op_text(instruction->op1_type,instruction->op1);
             if(op1!=NULL){
                 sprintf(inst_buffer,format,inst_buffer,op1);
             }
@@ -418,48 +455,49 @@ static const char *print_load(dfsan_label_info *label){
             sprintf(inst_buffer,"left (base+disp) + right (scale*index)\n");
             break; // LEA reg, [MULTIOPS(base,scale)+op1]
         case TAINT:
-            sprintf(inst_buffer,"TAINT:%llu\n",label->instruction.op1);
+            sprintf(inst_buffer,"TAINT:%llu\n",instruction->op1);
             break;
         case Load_REG:
-            sprintf(inst_buffer,"concrete:0x%llx\n",label->instruction.op1);
+            sprintf(inst_buffer,"concrete:0x%llx\n",instruction->op1);
+            break;
+        case CALL_HELPER:
+            sprintf(inst_buffer,"CALL\t%s",(char *)instruction->dest); //handling helper calls
             break;
         default:
-            sprintf(inst_buffer,"%d",label->instruction.op);
+            sprintf(inst_buffer,"%d",instruction->op);
             break;
     }
     return inst_buffer;
 }
 
-static const char *print_X86_instruction(dfsan_label_info *label){
+static const char *print_X86_instruction(inst *instruction){
 //    const char *inst_name = GET_INST_NAME(label->op);
 
-    const char *inst_name = get_inst_name(label->instruction.op);
+    const char *inst_name = get_inst_name(instruction->op);
     if(inst_name==NULL){
-        if ((label->instruction.op >= op_start_id) && (label->instruction.op < op_end_id)){
-            return print_load(label);
+        if ((instruction->op >= op_start_id) && (instruction->op < op_end_id)){
+            return print_load(instruction);
         }
         else{
             return NULL;
         }
     }
-
     inst_buffer[0] = '\0';
     sprintf(inst_buffer,"%s\t",inst_name);
     const char *format = "%s %s";
 
-    const char *op3 = op_text(label->instruction.dest_type,label->instruction.dest);
+    const char *op3 = op_text(instruction->dest_type,instruction->dest);
     if(op3!=NULL){
+
         sprintf(inst_buffer,format,inst_buffer,op3);
         format = "%s, %s";
     }
-
-    const char *op2 = op_text(label->instruction.op2_type,label->instruction.op2);
+    const char *op2 = op_text(instruction->op2_type,instruction->op2);
     if(op2!=NULL){
         sprintf(inst_buffer,format,inst_buffer,op2);
         format = "%s, %s";
     }
-
-    const char *op1 = op_text(label->instruction.op1_type,label->instruction.op1);
+    const char *op1 = op_text(instruction->op1_type,instruction->op1);
     if(op1!=NULL){
         sprintf(inst_buffer,format,inst_buffer,op1);
     }

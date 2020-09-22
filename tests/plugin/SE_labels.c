@@ -167,7 +167,10 @@ static void plugin_exit(qemu_plugin_id_t id, void *p)
 
     int root = dfsan_fini(label_file, graph_file);
 
-    dfsan_graphviz(root,graph_file);
+//    dfsan_graphviz(root,graph_file);
+    generate_asm(root);
+    print_asm_instructions();
+
     g_autoptr(GString) end_rep = g_string_new("\n");
     print_unsupported_ins(end_rep,unsupported_ins_log);
     g_string_append_printf(end_rep, "Done\n");
@@ -186,6 +189,8 @@ printf("debugging information for 2nd code cache optimization would not be print
 #endif
     unsupported_ins_log =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     syscall_rets =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
+
+    init_asm_generation(16);
     init_register_mapping();
     dfsan_init(&config);
     printInst = &print_X86_instruction;

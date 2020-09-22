@@ -24,9 +24,9 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-//#ifdef SANITIZER_CAN_USE_PREINIT_ARRAY //can't be used in the Qemu pluging environment
-//#undef SANITIZER_CAN_USE_PREINIT_ARRAY
-//#endif
+#ifdef SANITIZER_CAN_USE_PREINIT_ARRAY //comment out for Qemu plugin, uncomment for tests
+#undef SANITIZER_CAN_USE_PREINIT_ARRAY
+#endif
 
 //#define Swap(type,a,b) \
 //{\
