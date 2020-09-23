@@ -148,11 +148,23 @@ create_instruction(u64 op1, enum shadow_type op1_type, u64 op2, enum shadow_type
 
 static inline void
 mov_from_to(u64 from_op, enum shadow_type from_type, u64 to_op, enum shadow_type to_type, u16 to_size, u8 is_ptr) { //TODO: we would need the from size and the size specifier in the asm e.g. word, byte etc.
+    assert(from_type!=0 && to_type!=0);
     if (!IS_MEMORY(from_type) || !IS_MEMORY(to_type)) {
         MAKE_EXPLICIT(from_type); //add_operands reject it if otherwise
         MAKE_EXPLICIT(to_type);
         if(is_ptr){
             create_instruction(from_op, from_type, 0, UNASSIGNED, to_op, to_type, to_size, X86_INS_LEA);
+        }
+        else if(from_type==to_type && from_op==to_op){
+            return ;
+        }
+        else if (IS_GLOBAL(from_type) && from_op==FLAG_REG){
+            create_instruction(0, UNASSIGNED, 0, UNASSIGNED, 0, UNASSIGNED, 1, X86_INS_LAHF);
+            create_instruction(R_AH, GLOBAL, 0, UNASSIGNED, to_op, to_type, to_size, X86_INS_MOVZX);
+        }
+        else if (IS_GLOBAL(to_type) && to_op==FLAG_REG){
+            create_instruction(from_op, from_type , 0, UNASSIGNED, R_AH, GLOBAL, to_size, X86_INS_MOVZX);
+            create_instruction(0, UNASSIGNED, 0, UNASSIGNED, 0, UNASSIGNED, 1, X86_INS_SAHF);
         }
         else{
             create_instruction(from_op, from_type, 0, UNASSIGNED, to_op, to_type, to_size, X86_INS_MOVZX); //TODO: the size modifier should be considered during ASM generation
@@ -172,16 +184,6 @@ mov_from_to(u64 from_op, enum shadow_type from_type, u64 to_op, enum shadow_type
         assert(0);
     }
 #endif
-}
-
-static inline void create_instruction_label(dfsan_label_info *label) {
-    inst *instruction = &(label->instruction);
-    add_instruction(instruction);;
-    //store the result somewhere on the stack
-    label->label_mem = allocate_from_stack(8);
-    mov_from_to(instruction->dest, instruction->dest_type, (u64) label->label_mem, MEMORY,
-                instruction->size,0); //move the result to the stack space
-    //we can free the child nodes labels, but for now we just consume stack that wouldn't be a problem is the slice is not too large.
 }
 
 static inline void copy_parameter_n(int i, u64 param, enum shadow_type type, u16 size,u8 is_ptr) {
@@ -302,6 +304,25 @@ static inline void prepare_operand(dfsan_label label, u64 *op1, enum shadow_type
     //else it is either IMM or not assigned
 }
 
+static inline void create_instruction_label(dfsan_label_info *label) {
+    inst *instruction = &(label->instruction);
+
+    prepare_operand(label->l1, &(instruction->op1), instruction->op1_type,
+                    instruction->size); //move the data from l1 to op1
+
+    prepare_operand(label->l2, &(instruction->op2), instruction->op2_type,
+                    instruction->size); //move the data from l1 to op2
+
+    add_instruction(instruction);;
+    //store the result somewhere on the stack
+    label->label_mem = allocate_from_stack(8);
+//    const char *inst=printInst(instruction);
+//    printf("create_instruction_label called %s\n",inst);
+    mov_from_to(instruction->dest, instruction->dest_type, (u64) label->label_mem, MEMORY,
+                instruction->size,0); //move the result to the stack space
+    //we can free the child nodes labels, but for now we just consume stack that wouldn't be a problem is the slice is not too large.
+}
+
 static void generate_asm(int root) {
     struct dfsan_label_info *label = dfsan_get_label_info(root);
     if (label->label_mem != 0) {
@@ -309,15 +330,9 @@ static void generate_asm(int root) {
     }
     if (label->l1 != CONST_LABEL) {
         generate_asm(label->l1);
-        prepare_operand(label->l1, &(label->instruction.op1), label->instruction.op1_type,
-                        label->instruction.size); //move the data from l1 to op1
-        //if op1 is occupied, will push its previous value
     }
     if (label->l2 != CONST_LABEL) { // by appending to latest_node, we merge left and right labels)
         generate_asm(label->l2);
-        prepare_operand(label->l2, &(label->instruction.op2), label->instruction.op2_type,
-                        label->instruction.size); //move the data from l1 to op2
-        //if op2 is occupied, will push its previous value
     }
     if (label->instruction.dest == 0 && (label->instruction.op >= op_start_id && label->instruction.op < op_end_id)) {
         switch (label->instruction.op) {

@@ -24,8 +24,6 @@
 #include "nbench_instrument.c"
 #endif
 
-#define FLAG_REG 100 //assumes that flags are modeled via a single register with ID 100. Since we have only 92 mapped registers, value 100 is fine
-
 #define get_taint(src) (src.type==GLOBAL || src.type==GLOBAL_IMPLICIT)?dfsan_get_register_label(src.addr.id):dfsan_read_label((void *)src.addr.vaddr,src.size)
 #define set_taint(dst,val) \
         if(dst.type==GLOBAL || dst.type==GLOBAL_IMPLICIT){ \
@@ -265,7 +263,7 @@ static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
     }
 
     dfsan_label l4 =  dfsan_union(l1, l2, arg->operation, arg->src.size,
-                                    arg->src.addr.vaddr, arg->src2.addr.vaddr, arg->src.type, arg->src2.type, 0, UNASSIGNED); //both EAX and EDX would be affected as destination
+                                    arg->src.addr.vaddr, arg->src2.addr.vaddr, arg->src.type, arg->src2.type, arg->src2.addr.vaddr, arg->src2.type); //not fully correct, both EAX and EDX would be affected as destination
 
     set_taint(arg->dst,l4); // eax part of mul/div, eax = eax | Mul
 
@@ -469,7 +467,18 @@ static const char *print_load(inst *instruction){
     }
     return inst_buffer;
 }
-
+const char *frmt_inst_op = "%s %s";
+const char *frmt_2ops = "%s, %s";
+static inline char *print_op(char *inst_buffer, char *format, u64 op, enum shadow_type type){
+    const char *opStr = op_text(type,op);
+    if(opStr!=NULL){
+        sprintf(inst_buffer,format,inst_buffer,opStr);
+        return (char *)frmt_2ops;
+    }
+    else{
+        return format;
+    }
+}
 static const char *print_X86_instruction(inst *instruction){
 //    const char *inst_name = GET_INST_NAME(label->op);
 
@@ -484,23 +493,10 @@ static const char *print_X86_instruction(inst *instruction){
     }
     inst_buffer[0] = '\0';
     sprintf(inst_buffer,"%s\t",inst_name);
-    const char *format = "%s %s";
-
-    const char *op3 = op_text(instruction->dest_type,instruction->dest);
-    if(op3!=NULL){
-
-        sprintf(inst_buffer,format,inst_buffer,op3);
-        format = "%s, %s";
-    }
-    const char *op2 = op_text(instruction->op2_type,instruction->op2);
-    if(op2!=NULL){
-        sprintf(inst_buffer,format,inst_buffer,op2);
-        format = "%s, %s";
-    }
-    const char *op1 = op_text(instruction->op1_type,instruction->op1);
-    if(op1!=NULL){
-        sprintf(inst_buffer,format,inst_buffer,op1);
-    }
+    //print operands
+    char *format = print_op(inst_buffer,(char *)frmt_inst_op,instruction->dest,instruction->dest_type);
+    format = print_op(inst_buffer,format,instruction->op2,instruction->op2_type);
+    format = print_op(inst_buffer,format,instruction->op1,instruction->op1_type);
 
     return inst_buffer;
 }

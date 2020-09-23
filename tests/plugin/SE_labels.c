@@ -179,7 +179,7 @@ static void plugin_exit(qemu_plugin_id_t id, void *p)
 
 static void plugin_init(void)
 {
-    printf("Register numbers=%d\n",X86_REG_ENDING);
+//    printf("Register numbers=%d\n",X86_REG_ENDING);
     g_autoptr(GString) report = g_string_new("Initialization:\n");
 #ifdef CONFIG_2nd_CCACHE
     printf("2nd code cache optimization is activated!\n");

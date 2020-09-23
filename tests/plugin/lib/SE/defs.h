@@ -24,6 +24,8 @@
 #define CONST_OFFSET 1
 #define CONST_LABEL 0
 
+#define FLAG_REG 100 //assumes that flags are modeled via a single register with ID 100. Since we have only 92 mapped registers, value 100 is fine
+
 #define op_start_id X86_INS_ENDING + 1 //sina: change to the starting ID to avoid conflict with the ISA
 
 #define IS_MEMORY(X) ((((u16)X)==((u16)MEMORY)) || (((u16)X)==((u16)MEMORY_IMPLICIT)))
