@@ -15,6 +15,7 @@
 
 #define Qreg_to_Caps_Name(regId) get_reg_name(MAP_CAPS_ID(regId))
 
+#define get_qemu_reg_name(id,size) qemu_regs_to_size_map[id][size_map[size]]
 static uint32_t x86_regs_mapping[X86_REG_ENDING] = {INVALID_REGISTER};
 static uint32_t caps_x86_regs_mapping[X86_REG_ENDING] = {INVALID_REGISTER};
 void init_register_mapping(void);
@@ -263,7 +264,7 @@ void init_register_mapping(void){
     for (int i=0;i<NUM_MAPPED_REGISTERS;i++){
 //        printf("cap reg=%d -> qemu reg=%d\n",caps_x86_regs[i],qemu_x86_regs[i]);
         x86_regs_mapping[caps_x86_regs[i]] = qemu_x86_regs[i];
-        caps_x86_regs_mapping[qemu_x86_regs[i]] = caps_x86_regs[i];
+        caps_x86_regs_mapping[qemu_x86_regs[i]] = caps_x86_regs[i]; //The last reg between byte, word, dword, qword would be considered because all four versions of Qemu is mapped to a single CAPS
     }
 //    for (int i=0;i<X86_REG_ENDING;i++){
 //        printf("i=%d -> reg=%d\n",i,x86_regs_mapping[i]);

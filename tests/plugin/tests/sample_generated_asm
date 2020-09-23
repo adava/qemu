@@ -1,0 +1,29 @@
+movzx	 qword ptr[spl-16], 0x400
+movzx	 r14d, byte ptr[spl-2]
+movzx	 dword ptr[spl-24], r14d
+movsx	 rax, dword ptr[spl-24]
+movzx	 qword ptr[spl-28], rax
+movzx	 ebx, dword ptr[spl-28]
+lea	 ecx, dword ptr[rbx-48]
+movzx	 dword ptr[spl-36], ecx
+movzx	 ecx, dword ptr[spl-36]
+movzx	 ecx, ecx
+movzx	 dword ptr[spl-40], ecx
+movzx	 qword ptr[spl-44], 0x0
+movzx	 rcx, dword ptr[spl-40]
+movzx	 rsi, qword ptr[spl-44]
+add	 rsi, rcx
+movzx	 qword ptr[spl-52], rsi
+movzx	 qword ptr[spl-60], 0x0
+movzx	 rsi, qword ptr[spl-52]
+movzx	 ah, byte ptr[spl-60]
+sahf
+cmove	 rax, rsi
+movzx	 qword ptr[spl-68], rax
+movzx	 rcx, qword ptr[spl-16]
+movzx	 rax, qword ptr[spl-68]
+idiv	 rcx
+movzx	 qword ptr[spl-76], rax
+movzx	 rdi, qword ptr[spl-76]
+movsxd	 rdx, rdi
+movzx	 qword ptr[spl-84], rdx

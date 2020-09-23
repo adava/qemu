@@ -118,9 +118,9 @@ static void taint_cb_3ops(unsigned int cpu_index, void *udata){
         AOUT("use taint_cb_2ops function instead! OP=%d, operand1=%d, operand2=%d, operand3=%d\n",arg->operation, arg->src.type, arg->src2.type, arg->src3.type);
         assert(1);
     }
-    dfsan_label l1 = (arg->src.type==IMMEDIATE)?  CONST_LABEL: get_taint(arg->src);
-    dfsan_label l2 = (arg->src2.type==IMMEDIATE)? CONST_LABEL: get_taint(arg->src2);
-    dfsan_label l3 = (arg->src3.type==IMMEDIATE)? CONST_LABEL: get_taint(arg->src3);
+    dfsan_label l1 = (arg->src.type==IMMEDIATE || arg->src.type==UNASSIGNED)?  CONST_LABEL: get_taint(arg->src);
+    dfsan_label l2 = (arg->src2.type==IMMEDIATE || arg->src2.type==UNASSIGNED)? CONST_LABEL: get_taint(arg->src2);
+    dfsan_label l3 = (arg->src3.type==IMMEDIATE || arg->src3.type==UNASSIGNED)? CONST_LABEL: get_taint(arg->src3);
 
     if(arg->src3.type==MEMORY && arg->dst.type==MEMORY_IMPLICIT){ //ADC and FP instructions with 3 ops, the address was read in the mem_cb
         arg->dst.addr.vaddr = arg->src3.addr.vaddr;
@@ -164,8 +164,8 @@ static void taint_cb_3ops(unsigned int cpu_index, void *udata){
 static void taint_cb_effmem(unsigned int cpu_index, void *udata){
     INIT_ARG(arg,udata); //src=index, src2=base, src3=scale and src4=disp
 
-    dfsan_label l1 = (arg->src.type==IMMEDIATE)?  CONST_LABEL: get_taint(arg->src); //index
-    dfsan_label l2 = (arg->src2.type==IMMEDIATE)? CONST_LABEL: get_taint(arg->src2); //base
+    dfsan_label l1 = (arg->src.type==IMMEDIATE || arg->src.type==UNASSIGNED)?  CONST_LABEL: get_taint(arg->src); //index
+    dfsan_label l2 = (arg->src2.type==IMMEDIATE || arg->src2.type==UNASSIGNED)? CONST_LABEL: get_taint(arg->src2); //base
     dfsan_label l3 = CONST_LABEL;
 
     dfsan_label l4 = CONST_LABEL;
@@ -253,7 +253,7 @@ static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
 
     DEBUG_OUTPUT(arg,cb3_debug);
 
-    dfsan_label l1 = get_taint(arg->src);
+    dfsan_label l1 = get_taint(arg->src); //TODO: shouldn't I check IMM and UNASSIGNED?
     dfsan_label l2 = get_taint(arg->src2); //eax
 
     dfsan_label l3 = get_taint(arg->src3); //edx
@@ -361,17 +361,41 @@ static void taint_list_all(void){
 char imm_buffer[33];
 
 char inst_buffer[64];
-static inline const char *mem_text(x86_op_mem *eff_addr){ //[base + (index*scale) + disp]
+
+static inline void add_size_prefix(char *buf, u16 size){
+    char *tmp = strdup(buf);
+
+    switch (size){
+        case 1:
+            strcpy(imm_buffer,"byte ptr");
+            break;
+        case 2:
+            strcpy(imm_buffer,"word ptr");
+            break;
+        case 4:
+            strcpy(imm_buffer,"dword ptr");
+            break;
+        case 8:
+            strcpy(imm_buffer,"qword ptr");
+            break;
+        default:
+            printf("this size in not supported yet!\n");
+            assert(0);
+    }
+    strcat(imm_buffer,tmp);
+}
+
+static inline const char *mem_text(x86_op_mem *eff_addr, u16 size){ //[base + (index*scale) + disp]
     char index_scale[20]={'\0'}; //10 int chars + '*' + three reg identifier chars + '\0'
-    const char *base = eff_addr->base!=-1?Qreg_to_Caps_Name(eff_addr->base):"";
+    const char *base = eff_addr->base!=-1?get_qemu_reg_name(eff_addr->base,8):"";
     imm_buffer[0]='[';
     imm_buffer[1]= '\0';
     if(eff_addr->index!=-1){
         if(eff_addr->scale!=1){
-            sprintf(index_scale,"%s*%d",Qreg_to_Caps_Name(eff_addr->index),eff_addr->scale);
+            sprintf(index_scale,"%s*%d",get_qemu_reg_name(eff_addr->index,8),eff_addr->scale);
         }
         else{
-            sprintf(index_scale,"%s",Qreg_to_Caps_Name(eff_addr->index));
+            sprintf(index_scale,"%s",get_qemu_reg_name(eff_addr->index,8));
         }
     }
     if(eff_addr->base!=-1){
@@ -392,23 +416,30 @@ static inline const char *mem_text(x86_op_mem *eff_addr){ //[base + (index*scale
     else{
         sprintf(imm_buffer,"%s%s",imm_buffer,"]");
     }
+    add_size_prefix(imm_buffer, size);
     return (const char*)imm_buffer;;
 }
 
-static inline const char *op_text(enum shadow_type type, uint64_t operand){
+
+static inline const char *op_text(enum shadow_type type, uint64_t operand, u16 size){
     switch(type){
         case GLOBAL:
-            return Qreg_to_Caps_Name(operand);
+            if(operand<=R_HIGH){
+                return get_qemu_reg_name(operand,size);
+            }
+            else{
+                return Qreg_to_Caps_Name(operand);
+            }
         case IMMEDIATE:
             sprintf(imm_buffer,"0x%lx",operand);
             break;
-        case MULTIPLE_OPS:
+        case MULTIPLE_OPS: //not yet handled at ASM generation
             sprintf(imm_buffer,"%s","MULTIOPS");
             break;
         case MEMORY:
         case EFFECTIVE_ADDR:
             if(operand!=0){
-                return mem_text((x86_op_mem *)operand);
+                return mem_text((x86_op_mem *)operand,size);
             }
             else{
                 sprintf(imm_buffer,"%s",type==MEMORY?"[MEMORY]":"[$EFF_ADDR]");
@@ -439,15 +470,16 @@ static const char *print_load(inst *instruction){
             break;
         case UNION_MULTIPLE_OPS:
             inst_buffer[0] = '\0'; //for the second sprintf
-            op2 = op_text(instruction->op2_type,instruction->op2);
+            op2 = op_text(instruction->op2_type,instruction->op2,instruction->size);
             if(op2!=NULL){
                 sprintf(inst_buffer,format,op2);
                 format = "%s, %s";
             }
-            op1 = op_text(instruction->op1_type,instruction->op1);
+            op1 = op_text(instruction->op1_type,instruction->op1,instruction->size);
             if(op1!=NULL){
                 sprintf(inst_buffer,format,inst_buffer,op1);
             }
+//            printf("op1=%llu, op2=%llu, operands=%s",instruction->op1,instruction->op2,inst_buffer);
             break;
         case EFFECTIVE_ADDR_UNION:
             sprintf(inst_buffer,"left (base+disp) + right (scale*index)\n");
@@ -469,8 +501,8 @@ static const char *print_load(inst *instruction){
 }
 const char *frmt_inst_op = "%s %s";
 const char *frmt_2ops = "%s, %s";
-static inline char *print_op(char *inst_buffer, char *format, u64 op, enum shadow_type type){
-    const char *opStr = op_text(type,op);
+static inline char *print_op(char *inst_buffer, char *format, u64 op, enum shadow_type type, u16 size){
+    const char *opStr = op_text(type,op,size);
     if(opStr!=NULL){
         sprintf(inst_buffer,format,inst_buffer,opStr);
         return (char *)frmt_2ops;
@@ -494,10 +526,13 @@ static const char *print_X86_instruction(inst *instruction){
     inst_buffer[0] = '\0';
     sprintf(inst_buffer,"%s\t",inst_name);
     //print operands
-    char *format = print_op(inst_buffer,(char *)frmt_inst_op,instruction->dest,instruction->dest_type);
-    format = print_op(inst_buffer,format,instruction->op2,instruction->op2_type);
-    format = print_op(inst_buffer,format,instruction->op1,instruction->op1_type);
-
+    char *format = print_op(inst_buffer,(char *)frmt_inst_op,instruction->dest,instruction->dest_type,instruction->size);
+    format = print_op(inst_buffer,format,instruction->op2,instruction->op2_type,instruction->size);
+    int conv_size = instruction->size;
+    if((instruction->op==X86_INS_MOVZX || instruction->op==X86_INS_MOVSX) && instruction->size_src<instruction->size){ //handling size conversion
+        conv_size = instruction->size_src;
+    }
+    format = print_op(inst_buffer,format,instruction->op1,instruction->op1_type,conv_size); //assumes op1 and dst have the same size
     return inst_buffer;
 }
 

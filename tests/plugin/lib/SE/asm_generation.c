@@ -51,6 +51,8 @@ print_instruction printInst;
 typedef struct {
     u64 operand;
     enum shadow_type type;
+    void *label; //the memory placeholder for the value, needed for operand initialization
+    u16 size;
 } asm_operand;
 
 typedef struct {
@@ -133,7 +135,7 @@ static inline void add_instruction(inst *instruction) {
 
 static inline void
 create_instruction(u64 op1, enum shadow_type op1_type, u64 op2, enum shadow_type op2_type, u64 dest_op,
-                   enum shadow_type dest_type, u16 dest_size, u16 op) {
+                   enum shadow_type dest_type, u16 dest_size, u16 op, u16 src_size) {
     inst *temp = (inst *) malloc(sizeof(inst));
     temp->op1 = op1;
     temp->op2 = op2;
@@ -143,40 +145,41 @@ create_instruction(u64 op1, enum shadow_type op1_type, u64 op2, enum shadow_type
     temp->dest_type = dest_type;
     temp->size = dest_size;
     temp->op = op;
+    temp->size_src = src_size;
     add_instruction(temp);
 }
 
 static inline void
-mov_from_to(u64 from_op, enum shadow_type from_type, u64 to_op, enum shadow_type to_type, u16 to_size, u8 is_ptr) { //TODO: we would need the from size and the size specifier in the asm e.g. word, byte etc.
+mov_from_to(u64 from_op, enum shadow_type from_type, u64 to_op, enum shadow_type to_type, u16 to_size, u16 src_size, u8 is_ptr) { //TODO: we would need the from size and the size specifier in the asm e.g. word, byte etc.
     assert(from_type!=0 && to_type!=0);
     if (!IS_MEMORY(from_type) || !IS_MEMORY(to_type)) {
         MAKE_EXPLICIT(from_type); //add_operands reject it if otherwise
         MAKE_EXPLICIT(to_type);
         if(is_ptr){
-            create_instruction(from_op, from_type, 0, UNASSIGNED, to_op, to_type, to_size, X86_INS_LEA);
+            create_instruction(from_op, from_type, 0, UNASSIGNED, to_op, to_type, to_size, X86_INS_LEA, src_size);
         }
         else if(from_type==to_type && from_op==to_op){
             return ;
         }
         else if (IS_GLOBAL(from_type) && from_op==FLAG_REG){
-            create_instruction(0, UNASSIGNED, 0, UNASSIGNED, 0, UNASSIGNED, 1, X86_INS_LAHF);
-            create_instruction(R_AH, GLOBAL, 0, UNASSIGNED, to_op, to_type, to_size, X86_INS_MOVZX);
+            create_instruction(0, UNASSIGNED, 0, UNASSIGNED, 0, UNASSIGNED, 1, X86_INS_LAHF, 1);
+            create_instruction(R_AH, GLOBAL, 0, UNASSIGNED, to_op, to_type, to_size, X86_INS_MOVZX, 1); //zero extended that should be safe
         }
         else if (IS_GLOBAL(to_type) && to_op==FLAG_REG){
-            create_instruction(from_op, from_type , 0, UNASSIGNED, R_AH, GLOBAL, to_size, X86_INS_MOVZX);
-            create_instruction(0, UNASSIGNED, 0, UNASSIGNED, 0, UNASSIGNED, 1, X86_INS_SAHF);
+            create_instruction(from_op, from_type , 0, UNASSIGNED, R_AH, GLOBAL, 1, X86_INS_MOVZX, 1);
+            create_instruction(0, UNASSIGNED, 0, UNASSIGNED, 0, UNASSIGNED, 1, X86_INS_SAHF, 1);
         }
         else{
-            create_instruction(from_op, from_type, 0, UNASSIGNED, to_op, to_type, to_size, X86_INS_MOVZX); //TODO: the size modifier should be considered during ASM generation
+            create_instruction(from_op, from_type, 0, UNASSIGNED, to_op, to_type, to_size, X86_INS_MOVZX, src_size); //TODO: the size modifier should be considered during ASM generation
         }
     }
 #if 0
         else{ //both are mem, we can't use mov;
         MAKE_EXPLICIT(dest_type);
-        create_instruction(from_op,from_type,0,UNASSIGNED,0,UNASSIGNED,to_size,X86_INS_PUSH);
+        create_instruction(from_op,from_type,0,UNASSIGNED,0,UNASSIGNED,to_size,X86_INS_PUSH, src_size);
 
         MAKE_EXPLICIT(op1_type);
-        create_instruction(to_op,to_type,0,UNASSIGNED,0,UNASSIGNED,to_size,X86_INS_POP);
+        create_instruction(to_op,to_type,0,UNASSIGNED,0,UNASSIGNED,to_size,X86_INS_POP, src_size);
     }
 #else
     else {
@@ -211,7 +214,7 @@ static inline void copy_parameter_n(int i, u64 param, enum shadow_type type, u16
             printf("not supported yet!\n");
             assert(0);
     }
-    mov_from_to(param, type, dest, GLOBAL, size,is_ptr);
+    mov_from_to(param, type, dest, GLOBAL, 8, size,is_ptr); //we always use the 8 bytes version of the dest
 }
 
 /*The two helpers will place instructions to perform the following:
@@ -229,12 +232,12 @@ static void *callHelperTruncate(u64 operand, u16 orig_size, u16 trunc_size) {
     copy_parameter_n(3, trunc_size, IMMEDIATE, 8, 0);
     copy_parameter_n(4, (u64) res, MEMORY, 8, 1); //this parameter is a pointer, so LEA is needed.
     //Increment the stack pointer
-    create_instruction(-STACK_CURRENT_OFFSET, IMMEDIATE, R_ESP, GLOBAL,  R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_ADD); // current local vars plus an extra 8 bytes (eip but I could be wrong), so the callee can use the top of the stack
+    create_instruction(-STACK_CURRENT_OFFSET, IMMEDIATE, R_ESP, GLOBAL,  R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_ADD, 8); // current local vars plus an extra 8 bytes (eip but I could be wrong), so the callee can use the top of the stack
     //call
     create_instruction(0, UNASSIGNED, 0, UNASSIGNED, (u64) TRUNCATE_HELPER, IMMEDIATE, 2,
-                       CALL_HELPER); //should be a call to a relative address
+                       CALL_HELPER, 2); //should be a call to a relative address
     //Decrement the stack pointer
-    create_instruction(-STACK_CURRENT_OFFSET, IMMEDIATE, R_ESP, GLOBAL, R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_SUB); // so we can use the offseteting again
+    create_instruction(-STACK_CURRENT_OFFSET, IMMEDIATE, R_ESP, GLOBAL, R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_SUB, 8); // so we can use the offseteting again
 
     return res;
 }
@@ -249,16 +252,16 @@ static void *callHelperConcat(u64 op1, u16 op1_size, u64 op2, u16 op2_size, u16 
     copy_parameter_n(5, concat_size, IMMEDIATE, 8, 0);
     copy_parameter_n(6, (u64) res, MEMORY, 8, 1);
     //Increment the stack pointer
-    create_instruction(-STACK_CURRENT_OFFSET, IMMEDIATE, R_ESP, GLOBAL,  R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_ADD); // so the callee can use the top of the stack
+    create_instruction(-STACK_CURRENT_OFFSET, IMMEDIATE, R_ESP, GLOBAL,  R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_ADD, 8); // so the callee can use the top of the stack
     //call
     create_instruction(0, UNASSIGNED, 0, UNASSIGNED, (u64) CONCAT_HELPER, IMMEDIATE, 2,
-                       CALL_HELPER); //should be a call to a relative address
+                       CALL_HELPER, 2); //should be a call to a relative address
     //Decrement the stack pointer
-    create_instruction(-STACK_CURRENT_OFFSET, IMMEDIATE, R_ESP, GLOBAL, R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_SUB); // so we can use the offseteting again
+    create_instruction(-STACK_CURRENT_OFFSET, IMMEDIATE, R_ESP, GLOBAL, R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_SUB, 8); // so we can use the offseteting again
     return res;
 }
 
-static inline int add_operands(u64 op1, enum shadow_type op1_type, asm_operand *ret) {
+static inline int add_operands(u64 op1, enum shadow_type op1_type, asm_operand *ret, void *label, u16 size) {
     int i = 0;
     if (op1_type == MULTIPLE_OPS) {
         assert(op1 > 0);
@@ -270,6 +273,8 @@ static inline int add_operands(u64 op1, enum shadow_type op1_type, asm_operand *
         if (op1_type == EFFECTIVE_ADDR) assert(op1 > 0);
         ret[i].operand = op1; //can still keep the Qemu register ID here until the instruction creation
         ret[i].type = op1_type;
+        ret[i].label = label;
+        ret[i].size = size;
         i++;
     }
     //else if op is implicit or unassigned, ignore
@@ -277,13 +282,31 @@ static inline int add_operands(u64 op1, enum shadow_type op1_type, asm_operand *
 }
 
 static inline void
-merge_ops(u64 op1, enum shadow_type op1_type, u64 op2, enum shadow_type op2_type, multiple_operands *ret) {
+merge_ops(u64 op1, enum shadow_type op1_type, u64 op2, enum shadow_type op2_type, multiple_operands *ret, void *l1, u16 size_l1, void *l2, u16 size_l2) {
     int i, j = 0;
 
-    i = add_operands(op1, op1_type, &(ret->operands[0]));
-    j = add_operands(op2, op2_type, &(ret->operands[i]));
+    i = add_operands(op1, op1_type, &(ret->operands[0]), l1, size_l1);
+    j = add_operands(op2, op2_type, &(ret->operands[i]), l2, size_l2);
 
     ret->num_operands = i + j;
+}
+
+static inline void prep_one_operand(void *label_mem, u64 *op1, enum shadow_type op1_type, u16 size, u16 size_src){
+    if (IS_MEMORY(op1_type)) { //no need to move, just use the pointer to the label effective address
+         *op1 = (u64)label_mem; //op1 now points to the same memory; we avoid copying TAIN, LOAD etc. around
+    } else if (IS_GLOBAL(op1_type)) { //we have to move
+         mov_from_to((u64)label_mem, MEMORY, *op1, op1_type, size, size_src,0); //Note that even memory loads(Load, Taint, Concat) and Load_REG would be handled correctly this way
+    }
+    //else it is either IMM or not assigned
+}
+
+static inline void prep_mult_operand(u64 dest, u16 size){
+    multiple_operands *multOps = (multiple_operands *)dest;
+    for (int i=0;i<multOps->num_operands;i++){
+        if(multOps->operands[i].label!=NULL){
+            prep_one_operand(multOps->operands[i].label,&(multOps->operands[i].operand),multOps->operands[i].type,size,multOps->operands[i].size);
+        }
+    }
 }
 
 static inline void prepare_operand(dfsan_label label, u64 *op1, enum shadow_type op1_type,
@@ -291,17 +314,24 @@ static inline void prepare_operand(dfsan_label label, u64 *op1, enum shadow_type
     dfsan_label_info *labelInfo = dfsan_get_label_info(label);
     u64 dest = labelInfo->instruction.dest;
     u16 dest_type = labelInfo->instruction.dest_type;
-    if (dest_type == UNION_MULTIPLE_OPS || dest_type == EFFECTIVE_ADDR) {
+    if (dest_type == MULTIPLE_OPS || dest_type == EFFECTIVE_ADDR) {
         assert(dest > 0);
         assert(dest_type == op1_type);
-        *op1 = dest;
-    } else if (IS_MEMORY(op1_type)) { //no need to move, just use the pointer to the label effective address
-        *op1 = (u64)labelInfo->label_mem; //op1 now points to the same memory; we avoid copying TAIN, LOAD etc. around
-    } else if (IS_GLOBAL(op1_type)) { //we have to move
-        mov_from_to((u64) labelInfo->label_mem, MEMORY, *op1, op1_type,
-                    size,0); //Note that even memory loads(Load, Taint, Concat) and Load_REG would be handled correctly this way
+        *op1 = dest; //needed for the assembly text generation
+        if(dest_type == MULTIPLE_OPS) {
+            prep_mult_operand(dest,size); //prep each operand; needed for the data flow propagation
+
+        }
+        else { //EFFECTIVE_ADDR
+            dfsan_label_info *l1Info = dfsan_get_label_info(labelInfo->l1); //l1 is a a MULTI_OPS
+            dfsan_label_info *l2Info = dfsan_get_label_info(labelInfo->l2); //l2 is a a MULTI_OPS
+            prep_mult_operand((u64)l1Info->label_mem,size);
+            prep_mult_operand((u64)l2Info->label_mem,size);
+        }
     }
-    //else it is either IMM or not assigned
+    else{
+        prep_one_operand(labelInfo->label_mem, op1, op1_type, size, labelInfo->instruction.size);
+    }
 }
 
 static inline void create_instruction_label(dfsan_label_info *label) {
@@ -315,11 +345,13 @@ static inline void create_instruction_label(dfsan_label_info *label) {
 
     add_instruction(instruction);;
     //store the result somewhere on the stack
-    label->label_mem = allocate_from_stack(8);
+    label->label_mem = allocate_from_stack(instruction->size); //allocate as needed not always 8
 //    const char *inst=printInst(instruction);
 //    printf("create_instruction_label called %s\n",inst);
     mov_from_to(instruction->dest, instruction->dest_type, (u64) label->label_mem, MEMORY,
-                instruction->size,0); //move the result to the stack space
+                instruction->size, instruction->size,0); //move the result to the stack space
+    //In principal, we need to label_mems. If the instruction modifies the EFLAGS, we need to store the EFLAGS in that label that would take two instructions
+    //unless we assume that next instructions wouldn't mess up EFLAGS.
     //we can free the child nodes labels, but for now we just consume stack that wouldn't be a problem is the slice is not too large.
 }
 
@@ -330,6 +362,7 @@ static void generate_asm(int root) {
     }
     if (label->l1 != CONST_LABEL) {
         generate_asm(label->l1);
+        label->instruction.size_src = dfsan_get_label_info(label->l1)->instruction.size; //a temporary fix for size handling
     }
     if (label->l2 != CONST_LABEL) { // by appending to latest_node, we merge left and right labels)
         generate_asm(label->l2);
@@ -337,9 +370,9 @@ static void generate_asm(int root) {
     if (label->instruction.dest == 0 && (label->instruction.op >= op_start_id && label->instruction.op < op_end_id)) {
         switch (label->instruction.op) {
             case Load_REG:
-                label->label_mem = allocate_from_stack(8);
+                label->label_mem = allocate_from_stack(label->instruction.size);
                 mov_from_to(label->instruction.op1, label->instruction.op1_type, (u64) label->label_mem, MEMORY,
-                            label->instruction.size,0);
+                            label->instruction.size,label->instruction.size,0);
                 label->instruction.dest = (u64) label->label_mem;
                 break;
             case TAINT:
@@ -366,10 +399,12 @@ static void generate_asm(int root) {
                 break;
             }
             case UNION_MULTIPLE_OPS: {
+                dfsan_label_info *l1_label = dfsan_get_label_info(label->l1); //we need to keep track of label_mem in multiple_operands for operands initialization
+                dfsan_label_info *l2_label = dfsan_get_label_info(label->l2);
                 multiple_operands *ret = (multiple_operands *) calloc(1, sizeof(multiple_operands));
                 memset(ret, 0, sizeof(multiple_operands));
                 merge_ops(label->instruction.op1, label->instruction.op1_type, label->instruction.op2,
-                          label->instruction.op2_type, ret);
+                          label->instruction.op2_type, ret,l1_label->label_mem,l1_label->instruction.size,l2_label->label_mem,l2_label->instruction.size);
                 assert(ret->num_operands > 0);
                 label->instruction.dest = (u64) ret;
                 label->label_mem = (void *)ret;
@@ -415,7 +450,6 @@ int dfsan_graphviz_traverse(dfsan_label root, FILE *vz_fd, int i) {
     int prev_i = 0;
     if (root != CONST_LABEL) {
         dfsan_label_info *label = (dfsan_label_info *) dfsan_get_label_info(root);
-        printf("in dfsan_graphviz_traverse, label_ptr=%p\n",label);
         dfsan_label l1 = label->l1;
         dfsan_label l2 = label->l2;
         char *inst_name = (char *) printInst(&(label->instruction)); //GET_INST_NAME(__dfsan_label_info[i].op);

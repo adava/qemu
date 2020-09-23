@@ -112,7 +112,7 @@ static inline void analyze_mem_Addr(inst_callback_argument *res, x86_op_mem *mem
 
     }else{
         res->src.type = UNASSIGNED;
-        res->src.addr.id = 0;
+        res->src.addr.id = -1; //invalid for Qemu regs
     }
     if (mem_op->base!=X86_REG_INVALID){
         res->src2.addr.id = MAP_X86_REGISTER(mem_op->base);
@@ -120,7 +120,7 @@ static inline void analyze_mem_Addr(inst_callback_argument *res, x86_op_mem *mem
         res->src2.type = GLOBAL;
     }else{
         res->src2.type = UNASSIGNED;
-        res->src2.type = 0 ;
+        res->src2.addr.id = -1 ;
     }
 
     res->src3.addr.vaddr = mem_op->scale;
@@ -167,7 +167,7 @@ static void plugin_exit(qemu_plugin_id_t id, void *p)
 
     int root = dfsan_fini(label_file, graph_file);
 
-//    dfsan_graphviz(root,graph_file);
+    dfsan_graphviz(root,graph_file);
     generate_asm(root);
     print_asm_instructions();
 

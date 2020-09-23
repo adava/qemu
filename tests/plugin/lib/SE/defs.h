@@ -89,13 +89,14 @@ typedef struct inst{
     enum shadow_type dest_type;
     u16 op;
     u16 size;
+    u16 size_src; //strictly used for additional propagation between former destination and current destination
 } inst;
 
 typedef struct dfsan_label_info {
     dfsan_label l1;
     dfsan_label l2;
     inst instruction;
-    u8 flags;
+    u8 flags; //is not utilized now
     u32 tree_size;
     u32 hash;
     void *label_mem; //pointer to an effective address assigned at assembly generation
