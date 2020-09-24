@@ -163,14 +163,27 @@ mov_from_to(u64 from_op, enum shadow_type from_type, u64 to_op, enum shadow_type
         }
         else if (IS_GLOBAL(from_type) && from_op==FLAG_REG){
             create_instruction(0, UNASSIGNED, 0, UNASSIGNED, 0, UNASSIGNED, 1, X86_INS_LAHF, 1);
-            create_instruction(R_AH, GLOBAL, 0, UNASSIGNED, to_op, to_type, to_size, X86_INS_MOVZX, 1); //zero extended that should be safe
+            create_instruction(R_AH, GLOBAL, 0, UNASSIGNED, to_op, to_type, 1, X86_INS_MOV, 1); //zero extended that should be safe
         }
         else if (IS_GLOBAL(to_type) && to_op==FLAG_REG){
-            create_instruction(from_op, from_type , 0, UNASSIGNED, R_AH, GLOBAL, 1, X86_INS_MOVZX, 1);
+            create_instruction(from_op, from_type , 0, UNASSIGNED, R_AH, GLOBAL, 1, X86_INS_MOV, 1);
             create_instruction(0, UNASSIGNED, 0, UNASSIGNED, 0, UNASSIGNED, 1, X86_INS_SAHF, 1);
         }
         else{
-            create_instruction(from_op, from_type, 0, UNASSIGNED, to_op, to_type, to_size, X86_INS_MOVZX, src_size); //TODO: the size modifier should be considered during ASM generation
+            if(IS_MEMORY(to_type) || src_size==to_size){
+                create_instruction(from_op, from_type, 0, UNASSIGNED, to_op, to_type, src_size, X86_INS_MOV, src_size);
+            }
+            else{ //there is a size conversion
+                if(src_size>to_size){ //we need only part of src, just use move
+                    create_instruction(from_op, from_type, 0, UNASSIGNED, to_op, to_type, to_size, X86_INS_MOV, to_size);
+                }
+                else if (src_size==4){ //we can't use MOVZX for 32bit to 64bit
+                    create_instruction(from_op, from_type, 0, UNASSIGNED, to_op, to_type, src_size, X86_INS_MOV, src_size); //just copy as much as you can with a simple move
+                }
+                else{
+                    create_instruction(from_op, from_type, 0, UNASSIGNED, to_op, to_type, to_size, X86_INS_MOVZX, src_size); //TODO: the size modifier should be considered during ASM generation
+                }
+            }
         }
     }
 #if 0
@@ -336,9 +349,12 @@ static inline void prepare_operand(dfsan_label label, u64 *op1, enum shadow_type
 
 static inline void create_instruction_label(dfsan_label_info *label) {
     inst *instruction = &(label->instruction);
+//    const char *inst=printInst(instruction);
+//    printf("prepare_operand called %s\n",inst);
 
     prepare_operand(label->l1, &(instruction->op1), instruction->op1_type,
                     instruction->size); //move the data from l1 to op1
+//    printf("prepare_operand called %s\n",inst);
 
     prepare_operand(label->l2, &(instruction->op2), instruction->op2_type,
                     instruction->size); //move the data from l1 to op2
@@ -346,7 +362,6 @@ static inline void create_instruction_label(dfsan_label_info *label) {
     add_instruction(instruction);;
     //store the result somewhere on the stack
     label->label_mem = allocate_from_stack(instruction->size); //allocate as needed not always 8
-//    const char *inst=printInst(instruction);
 //    printf("create_instruction_label called %s\n",inst);
     mov_from_to(instruction->dest, instruction->dest_type, (u64) label->label_mem, MEMORY,
                 instruction->size, instruction->size,0); //move the result to the stack space

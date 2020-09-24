@@ -222,28 +222,32 @@ static void taint_cb_CMPCHG(unsigned int cpu_index, void *udata){
     dfsan_label l1 = get_taint(arg->src); //dst=src (if eax==dst)
     dfsan_label l2 = get_taint(arg->dst);
     dfsan_label l3 = get_taint(arg->src2); //eax=dst (if eax!=dst) part that we conservatively propagate (EAX in src2)
-    dfsan_label xchg_label = CONST_LABEL;
+    dfsan_label xchg_label_src2 = CONST_LABEL;
+    dfsan_label xchg_label_dst = CONST_LABEL;
     if(l1!=CONST_LABEL || l2!=CONST_LABEL || l3!=CONST_LABEL) {
         dfsan_label l4 =  dfsan_union(l2, l3, UNION_MULTIPLE_OPS, arg->dst.size,
                                         arg->dst.addr.vaddr, arg->src2.addr.id, arg->dst.type, arg->src2.type, 0, UNASSIGNED);
-        xchg_label = dfsan_union(l1, l4, arg->operation, arg->src.size,
-                                               arg->src.addr.vaddr, 0, arg->src.type, MULTIPLE_OPS, 0,
-                                               UNASSIGNED); //Since multiple destinations are affected, I mark destination type as UNASSIGNED
+        xchg_label_dst = dfsan_union(l1, l4, arg->operation, arg->src.size,
+                                               arg->src.addr.vaddr, 0, arg->src.type, MULTIPLE_OPS, arg->dst.addr.vaddr,
+                                     arg->dst.type); //Since multiple destinations, I'll make two unions with different destinations; there should always be a destination since we will not know where the label came from
+        xchg_label_src2 = dfsan_union(l1, l4, arg->operation, arg->src.size,
+                                 arg->src.addr.vaddr, 0, arg->src.type, MULTIPLE_OPS, arg->src2.addr.vaddr,
+                                      arg->src2.type);
     }
     else{
         return; //propagation of CONST_LABEL is redundant
     }
     //either eax=dst branch executes that results in dst taint being loaded, or doesn't that previous eax holds
     if(l3!=CONST_LABEL || l2!=CONST_LABEL){ //otherwise EAX remains not tainted
-        set_taint(arg->src2,xchg_label);
+        set_taint(arg->src2,xchg_label_src2);
         OUTPUT_ERROR(err,arg,"CMPCHG propagate from dst to EAX");
     }
     if(l1!=CONST_LABEL || l2!=CONST_LABEL) { //otherwise dst remains not tainted
-        set_taint(arg->dst,xchg_label); // we conservatively propagate; note that for xchg_label, we first load dst with its previous load (left branch of MULTIPLE_OPS)
+        set_taint(arg->dst,xchg_label_dst); // we conservatively propagate; note that for xchg_label, we first load dst with its previous load (left branch of MULTIPLE_OPS)
         OUTPUT_ERROR(err,arg,"CMPCHG propagate from src to dst");
     }
 
-    set_flags(arg->flags,xchg_label);
+    set_flags(arg->flags,xchg_label_dst);
 }
 
 static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
@@ -362,30 +366,35 @@ char imm_buffer[33];
 
 char inst_buffer[64];
 
-static inline void add_size_prefix(char *buf, u16 size){
+static inline void add_size_prefix(char *buf, u16 size){ //to support concat and trunc we have other sizes in addition to the powers of 2
     char *tmp = strdup(buf);
 
     switch (size){
+        case 0:
         case 1:
             strcpy(imm_buffer,"byte ptr");
             break;
         case 2:
             strcpy(imm_buffer,"word ptr");
             break;
+        case 3:
         case 4:
             strcpy(imm_buffer,"dword ptr");
             break;
+        case 5:
+        case 6:
+        case 7:
         case 8:
             strcpy(imm_buffer,"qword ptr");
             break;
         default:
-            printf("this size in not supported yet!\n");
+            printf("this size in not supported yet = %d!\n",size);
             assert(0);
     }
     strcat(imm_buffer,tmp);
 }
 
-static inline const char *mem_text(x86_op_mem *eff_addr, u16 size){ //[base + (index*scale) + disp]
+static inline const char *mem_text(x86_op_mem *eff_addr, u16 size, u8 add_pref){ //[base + (index*scale) + disp]
     char index_scale[20]={'\0'}; //10 int chars + '*' + three reg identifier chars + '\0'
     const char *base = eff_addr->base!=-1?get_qemu_reg_name(eff_addr->base,8):"";
     imm_buffer[0]='[';
@@ -416,12 +425,14 @@ static inline const char *mem_text(x86_op_mem *eff_addr, u16 size){ //[base + (i
     else{
         sprintf(imm_buffer,"%s%s",imm_buffer,"]");
     }
-    add_size_prefix(imm_buffer, size);
+    if(add_pref){
+        add_size_prefix(imm_buffer, size);
+    }
     return (const char*)imm_buffer;;
 }
 
 
-static inline const char *op_text(enum shadow_type type, uint64_t operand, u16 size){
+static inline const char *op_text(enum shadow_type type, uint64_t operand, u16 size, u8 add_pref){
     switch(type){
         case GLOBAL:
             if(operand<=R_HIGH){
@@ -439,7 +450,7 @@ static inline const char *op_text(enum shadow_type type, uint64_t operand, u16 s
         case MEMORY:
         case EFFECTIVE_ADDR:
             if(operand!=0){
-                return mem_text((x86_op_mem *)operand,size);
+                return mem_text((x86_op_mem *)operand,size,add_pref);
             }
             else{
                 sprintf(imm_buffer,"%s",type==MEMORY?"[MEMORY]":"[$EFF_ADDR]");
@@ -470,12 +481,12 @@ static const char *print_load(inst *instruction){
             break;
         case UNION_MULTIPLE_OPS:
             inst_buffer[0] = '\0'; //for the second sprintf
-            op2 = op_text(instruction->op2_type,instruction->op2,instruction->size);
+            op2 = op_text(instruction->op2_type,instruction->op2,instruction->size,0);
             if(op2!=NULL){
                 sprintf(inst_buffer,format,op2);
                 format = "%s, %s";
             }
-            op1 = op_text(instruction->op1_type,instruction->op1,instruction->size);
+            op1 = op_text(instruction->op1_type,instruction->op1,instruction->size,0);
             if(op1!=NULL){
                 sprintf(inst_buffer,format,inst_buffer,op1);
             }
@@ -501,8 +512,8 @@ static const char *print_load(inst *instruction){
 }
 const char *frmt_inst_op = "%s %s";
 const char *frmt_2ops = "%s, %s";
-static inline char *print_op(char *inst_buffer, char *format, u64 op, enum shadow_type type, u16 size){
-    const char *opStr = op_text(type,op,size);
+static inline char *print_op(char *inst_buffer, char *format, u64 op, enum shadow_type type, u16 size, u8 add_pref){
+    const char *opStr = op_text(type,op,size,add_pref);
     if(opStr!=NULL){
         sprintf(inst_buffer,format,inst_buffer,opStr);
         return (char *)frmt_2ops;
@@ -513,7 +524,19 @@ static inline char *print_op(char *inst_buffer, char *format, u64 op, enum shado
 }
 static const char *print_X86_instruction(inst *instruction){
 //    const char *inst_name = GET_INST_NAME(label->op);
-
+    int conv_size = instruction->size;
+    u8 add_pref = 1;
+    if((instruction->op==X86_INS_MOVZX || instruction->op==X86_INS_MOVSX || instruction->op==X86_INS_MOVSXD)){ //handling size conversion
+        if(instruction->size_src<instruction->size){
+            conv_size = instruction->size_src;
+        }
+        else{
+            instruction->op = X86_INS_MOV; //TODO: this is just a dirty fix for not having the actual operand size
+        }
+    }
+    if(instruction->op==X86_INS_LEA){
+        add_pref = 0;
+    }
     const char *inst_name = get_inst_name(instruction->op);
     if(inst_name==NULL){
         if ((instruction->op >= op_start_id) && (instruction->op < op_end_id)){
@@ -526,13 +549,9 @@ static const char *print_X86_instruction(inst *instruction){
     inst_buffer[0] = '\0';
     sprintf(inst_buffer,"%s\t",inst_name);
     //print operands
-    char *format = print_op(inst_buffer,(char *)frmt_inst_op,instruction->dest,instruction->dest_type,instruction->size);
-    format = print_op(inst_buffer,format,instruction->op2,instruction->op2_type,instruction->size);
-    int conv_size = instruction->size;
-    if((instruction->op==X86_INS_MOVZX || instruction->op==X86_INS_MOVSX) && instruction->size_src<instruction->size){ //handling size conversion
-        conv_size = instruction->size_src;
-    }
-    format = print_op(inst_buffer,format,instruction->op1,instruction->op1_type,conv_size); //assumes op1 and dst have the same size
+    char *format = print_op(inst_buffer,(char *)frmt_inst_op,instruction->dest,instruction->dest_type,instruction->size,add_pref);
+    format = print_op(inst_buffer,format,instruction->op2,instruction->op2_type,instruction->size,add_pref);
+    format = print_op(inst_buffer,format,instruction->op1,instruction->op1_type,conv_size,add_pref); //assumes op1 and dst have the same size
     return inst_buffer;
 }
 
