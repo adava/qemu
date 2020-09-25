@@ -1,29 +1,46 @@
-movzx	 qword ptr[spl-16], 0x400
-movzx	 r14d, byte ptr[spl-2]
-movzx	 dword ptr[spl-24], r14d
-movsx	 rax, dword ptr[spl-24]
-movzx	 qword ptr[spl-28], rax
-movzx	 ebx, dword ptr[spl-28]
-lea	 ecx, dword ptr[rbx-48]
-movzx	 dword ptr[spl-36], ecx
-movzx	 ecx, dword ptr[spl-36]
-movzx	 ecx, ecx
-movzx	 dword ptr[spl-40], ecx
-movzx	 qword ptr[spl-44], 0x0
-movzx	 rcx, dword ptr[spl-40]
-movzx	 rsi, qword ptr[spl-44]
+sub rsp, rsi
+xor rcx, rcx
+xor al, al
+Copy_input:
+cmp rsi, rcx
+je  Slice_code
+inc rdi
+inc rsp
+mov al, byte ptr [rdi-1]
+mov byte ptr [rsp-1], al
+inc rcx
+jmp Copy_input
+Slice_code:
+mov	 qword ptr[rsp-16], 0x400
+movzx	 r14d, byte ptr[rsp-6]
+mov	 dword ptr[rsp-20], r14d
+movsxd	 rax, dword ptr[rsp-20]
+mov	 qword ptr[rsp-28], rax
+mov	 ebx, dword ptr[rsp-28]
+lea	 ecx, [rbx-48]
+mov	 dword ptr[rsp-32], ecx
+mov	 ecx, dword ptr[rsp-32]
+mov	 ecx, ecx
+mov	 dword ptr[rsp-36], ecx
+mov	 qword ptr[rsp-44], 0x0
+mov	 ecx, dword ptr[rsp-36]
+mov	 rsi, qword ptr[rsp-44]
 add	 rsi, rcx
-movzx	 qword ptr[spl-52], rsi
-movzx	 qword ptr[spl-60], 0x0
-movzx	 rsi, qword ptr[spl-52]
-movzx	 ah, byte ptr[spl-60]
+mov	 qword ptr[rsp-52], rsi
+mov	 qword ptr[rsp-60], 0x202
+mov	 rsi, qword ptr[rsp-52]
+mov	 ah, byte ptr[rsp-60]
 sahf
 cmove	 rax, rsi
-movzx	 qword ptr[spl-68], rax
-movzx	 rcx, qword ptr[spl-16]
-movzx	 rax, qword ptr[spl-68]
+mov	 qword ptr[rsp-68], rax
+mov	 al, byte ptr[rsp-68]
+cqo
+mov	 byte ptr[rsp-68], dl
+mov	 rcx, qword ptr[rsp-16]
 idiv	 rcx
-movzx	 qword ptr[spl-76], rax
-movzx	 rdi, qword ptr[spl-76]
-movsxd	 rdx, rdi
-movzx	 qword ptr[spl-84], rdx
+mov	 qword ptr[rsp-76], rax
+mov	 rdi, qword ptr[rsp-76]
+mov	 rdx, rdi
+mov	 qword ptr[rsp-84], rdx
+mov	 rax, qword ptr[rsp-84]
+ret

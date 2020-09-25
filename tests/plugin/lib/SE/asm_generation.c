@@ -38,10 +38,9 @@
 #include "../../../../capstone/include/capstone.h"
 //#include "../tainting.h"
 #include "../utility.h"
-#include "defs.h"
 #include "dfsan_interface.h"
 
-#define MAX_INPUT_SIZE 1024
+#define MAX_INPUT_SIZE 1024 //change it as needed; not sure how large it can be since we use caller stack and here we also aggressively use stack without cleaning
 #define INVALID_REGISTER -1
 
 #define MAKE_EXPLICIT(X) X=(((u16)X==(u16)GLOBAL_IMPLICIT || (u16)X==(u16)MEMORY_IMPLICIT))?(enum shadow_type)((u16)X-1):X
@@ -75,29 +74,63 @@ void *taints[MAX_INPUT_SIZE];
 
 s32 STACK_START_OFFSET;
 s32 STACK_CURRENT_OFFSET;
-
+s32 TAINT_CURRENT_OFFSET;
+s32 INPUT_SIZE;
 //the below helper_calls should be initialized for this module. The best approach is to just place the assembly code for the function
 //in the beginning of the assembly stream and pass their relative offset to this module
+
+x86_op_mem *STACK_TOP;
+u16 stack_top_size=0;
 
 void *CONCAT_HELPER; //func(op1,op1_size,op2,op2_size,concat_size,retaddr) shift op1 op1_size left, and 'or' it with op2 shifted right op2_size. Copy the result to retaddr.
 void *TRUNCATE_HELPER; //func(op,orig_size,trunc_size,retaddr) that would shift operand orig_size-trunc_size left, then shift back right. Copy the result to retaddr.
 
+// +--------------------+
+// |    Past frames     |
+// |                    |
+// +--------------------+ Stack Base + num_tainted_bytes
+// |       Taints       |
+// +--------------------+ Stack Base (Before the slice, the prologue copies the taints and subtracts num_tainted_bytes from esp)
+// +--------------------+
+// |    Other labels    |
+// +--------------------+ STACK_TOP (initially Stack Base, but changes based on allocations)
+
+static inline void *initialize_taints_addrs(int size) {
+    x86_op_mem *eff_mem = (x86_op_mem *) malloc(sizeof(x86_op_mem));
+    eff_mem->base = R_ESP;
+    eff_mem->index = INVALID_REGISTER;
+    eff_mem->disp = STACK_START_OFFSET + TAINT_CURRENT_OFFSET;
+//    printf("disp=%d, TAINT_START_OFFSET=%d, TAINT_CURRENT_OFFSET=%d\n",eff_mem->disp,TAINT_START_OFFSET,TAINT_CURRENT_OFFSET);
+    eff_mem->scale = 1;
+    //eff_mem->segment = 0; //not sure what it should be
+    TAINT_CURRENT_OFFSET += size; //we allocate slots of 8 bytes
+    return (void *) eff_mem;
+}
+
 
 static inline void *allocate_from_stack(int size) {
     x86_op_mem *eff_mem = (x86_op_mem *) malloc(sizeof(x86_op_mem));
+    STACK_CURRENT_OFFSET -= size; //large enough for the variable
     eff_mem->base = R_ESP;
     eff_mem->index = INVALID_REGISTER;
     eff_mem->disp = STACK_START_OFFSET + STACK_CURRENT_OFFSET;
     eff_mem->scale = 1;
     //eff_mem->segment = 0; //not sure what it should be
-    STACK_CURRENT_OFFSET -= size; //we allocate slots of 8 bytes
+    STACK_TOP = eff_mem;
+    stack_top_size = size;
     return (void *) eff_mem;
 }
 
 static void init_asm_generation(int num_tainted_bytes){
+    INPUT_SIZE = num_tainted_bytes;
+    STACK_CURRENT_OFFSET = TAINT_CURRENT_OFFSET = 0; //no bp push, we have our own prologue and way of accessing locals (we directly use sp)
+    STACK_START_OFFSET = 0 - num_tainted_bytes; //Assume the num_tainted_bytes were copied into this frame
+    assert(num_tainted_bytes<MAX_INPUT_SIZE);
     for (int i=0;i<num_tainted_bytes;i++){
-        taints[i] = allocate_from_stack(1);
+        taints[i] = initialize_taints_addrs(1);
     }
+    stack_top_size = 0;
+    STACK_TOP = NULL;
     CONCAT_HELPER = (void *)strdup(CONCAT_HELPER_NAME);
     TRUNCATE_HELPER = (void *)strdup(TRUNC_HELPER_NAME);
 }
@@ -282,7 +315,7 @@ static inline int add_operands(u64 op1, enum shadow_type op1_type, asm_operand *
         for (i = 0; i < loperands->num_operands; i++) {
             ret[i] = loperands->operands[i];
         }
-    } else if (op1_type == EFFECTIVE_ADDR || op1_type == GLOBAL || op1_type == IMMEDIATE || op1_type == MEMORY) {
+    } else if (op1_type == EFFECTIVE_ADDR || IS_GLOBAL(op1_type)  || op1_type == IMMEDIATE || IS_MEMORY(op1_type)) {
         if (op1_type == EFFECTIVE_ADDR) assert(op1 > 0);
         ret[i].operand = op1; //can still keep the Qemu register ID here until the instruction creation
         ret[i].type = op1_type;
@@ -348,7 +381,9 @@ static inline void prepare_operand(dfsan_label label, u64 *op1, enum shadow_type
 }
 
 static inline void create_instruction_label(dfsan_label_info *label) {
+
     inst *instruction = &(label->instruction);
+    assert(instruction->op!=0);
 //    const char *inst=printInst(instruction);
 //    printf("prepare_operand called %s\n",inst);
 
@@ -370,10 +405,14 @@ static inline void create_instruction_label(dfsan_label_info *label) {
     //we can free the child nodes labels, but for now we just consume stack that wouldn't be a problem is the slice is not too large.
 }
 
+//TODO: still not sure if propagation for EFLAGS is done correctly
 static void generate_asm(int root) {
     struct dfsan_label_info *label = dfsan_get_label_info(root);
     if (label->label_mem != 0) {
         return; //we already evaluated this label, in another subtree; just use the value stored in label_mem
+    }
+    if(root==CONST_LABEL){
+        return; //in case the root is CONST in the first place
     }
     if (label->l1 != CONST_LABEL) {
         generate_asm(label->l1);
@@ -391,6 +430,7 @@ static void generate_asm(int root) {
                 label->instruction.dest = (u64) label->label_mem;
                 break;
             case TAINT:
+                assert(label->instruction.op1<INPUT_SIZE); //the given input at exec time has been larger than the configured size for asm generation
                 label->label_mem = taints[label->instruction.op1]; //op1 is expected to have the legit offset
                 label->instruction.dest = (u64) label->label_mem;
                 break;
@@ -451,11 +491,26 @@ static void generate_asm(int root) {
     }
 }
 
+static void generate_asm_func(int root){
+    //add prologue here
+    generate_asm(root);
+    //add epilogue here
+    if(STACK_TOP!=NULL){ //return value that is that last label value
+        create_instruction((u64)STACK_TOP, MEMORY, 0, UNASSIGNED, R_EAX, GLOBAL, stack_top_size, X86_INS_MOV, stack_top_size);
+    }
+
+    create_instruction(0, UNASSIGNED, 0, UNASSIGNED, 0, UNASSIGNED, 1, X86_INS_RET, 1);
+}
+
 static void print_asm_instructions(void){
     for(inst_list *temp=instructions_head;temp!=NULL;temp=temp->next_inst){
         const char *asm_ins_txt=print_X86_instruction(temp->ins);
-        assert(asm_ins_txt!=NULL);
-        printf("%s\n",asm_ins_txt);
+        if(asm_ins_txt!=NULL){
+            printf("%s\n",asm_ins_txt);
+        }
+        else{
+            printf("WARNING: Instruction text for op=%d, op1=%llx, op2=%llx, dest=%llx, was %p\n",temp->ins->op, temp->ins->op1, temp->ins->op2, temp->ins->dest,asm_ins_txt);
+        }
     }
 }
 

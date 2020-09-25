@@ -17,6 +17,8 @@
 #include "shadow_memory.h"
 #include "lib/tainting.h"
 #include "dfsan_interface.h"
+
+//#include "asm_generation.h"
 //#include "dfsan.h"
 //#include "lib/DFSan/dfsan.c" have to provide the library at compile time
 
@@ -79,13 +81,6 @@ static void taint_cb_mov2(unsigned int cpu_index, void *udata){
 static void taint_cb_2ops(unsigned int cpu_index, void *udata){
     INIT_ARG(arg,udata);
     DEBUG_OUTPUT(arg,"taint_cb_2ops");
-    shad_inq eip={.size=SHD_SIZE_u64,.type=GLOBAL,.addr.id=R_EIP};
-    uint64_t eip_val=0;
-    if ((int)arg->operation==(int)X86_INS_IMUL){
-        eip_val = 0;
-        READ_VALUE(eip, &eip_val);
-    }
-
 
     dfsan_label l1 = (arg->src.type==IMMEDIATE || arg->src.type==UNASSIGNED)?CONST_LABEL: get_taint(arg->src); //in case of IMUL with 3 ops, the src can be IMM.
     dfsan_label l2 = (arg->src2.type==IMMEDIATE || arg->src2.type==UNASSIGNED)?CONST_LABEL: get_taint(arg->src2);  //for SETcc and MOVcc, type is UNASSIGNED
@@ -103,9 +98,10 @@ static void taint_cb_2ops(unsigned int cpu_index, void *udata){
 
     set_flags(arg->flags,dst_label);
 
-//    if ((int)arg->operation==(int)X86_INS_IMUL){ //debugging fot the instructions appearing 5 times in the unrolled loop
+//    if ((int)arg->operation==(int)X86_INS_IMUL){ //debugging for the instructions appearing 5 times in the unrolled loop
 //        printf("MUL/DIV eip=0x%lx, dst_label=%d\n",eip_val,dst_label);
 //    }
+    assert(arg->operation!=0);
 
 }
 //support the union of up to three operands
@@ -257,24 +253,43 @@ static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
 
     DEBUG_OUTPUT(arg,cb3_debug);
 
-    dfsan_label l1 = get_taint(arg->src); //TODO: shouldn't I check IMM and UNASSIGNED?
+    dfsan_label l1 = (arg->src.type==IMMEDIATE || arg->src.type==UNASSIGNED)? CONST_LABEL: get_taint(arg->src); //could be IMM
     dfsan_label l2 = get_taint(arg->src2); //eax
 
     dfsan_label l3 = get_taint(arg->src3); //edx
 
-    if(l1==CONST_LABEL && l2==CONST_LABEL){ //no propagation
-        return;
+    if(arg->dst.size==1){
+        if(l1==CONST_LABEL && l2==CONST_LABEL){ //no propagation
+            return;
+        }
+        else{
+            dfsan_label l4 =  dfsan_union(l1, l2, arg->operation, arg->dst.size,
+                                          arg->src.addr.vaddr, arg->src2.addr.vaddr, arg->src.type, arg->src2.type, arg->dst.addr.vaddr, arg->dst.type);
+            set_taint(arg->dst,l4); // eax
+            set_flags(arg->flags,l4);
+        }
     }
+    else{ //rdx will be also tainted
+        if(l1==CONST_LABEL && l2==CONST_LABEL && l3==CONST_LABEL){ //no propagation
+            return;
+        }
+        else{
+            dfsan_label l4 = dfsan_union(l2, l3, UNION_MULTIPLE_OPS , arg->src2.size,
+                                         arg->src2.addr.vaddr, arg->src3.addr.vaddr, arg->src2.type, arg->src3.type, 0, UNASSIGNED); //we need the union regardless because even the constants are needed
 
-    dfsan_label l4 =  dfsan_union(l1, l2, arg->operation, arg->src.size,
-                                    arg->src.addr.vaddr, arg->src2.addr.vaddr, arg->src.type, arg->src2.type, arg->src2.addr.vaddr, arg->src2.type); //not fully correct, both EAX and EDX would be affected as destination
+            dfsan_label l5 =  dfsan_union(l1, l4, arg->operation, arg->dst.size,
+                                          arg->src.addr.vaddr, 0, arg->src.type, MULTIPLE_OPS, arg->dst.addr.vaddr, arg->dst.type); //EAX part; EAX and EDX would be affected as destination
 
-    set_taint(arg->dst,l4); // eax part of mul/div, eax = eax | Mul
+            dfsan_label l6 = dfsan_union(l1, l4, arg->operation, arg->src3.size,
+                                          arg->src.addr.vaddr, 0, arg->src.type, MULTIPLE_OPS, arg->src3.addr.id, arg->src3.type); //EDX part
 
-    dfsan_label l6 = ((l3 == CONST_LABEL)? l4 : dfsan_union(l3, l4, Nop, arg->dst.size, 0, 0, UNASSIGNED, UNASSIGNED, arg->src3.addr.id, arg->src3.type)); //l3 is not part of l4, hence union
-    set_taint(arg->src3,l6); // edx part of mul/div
+            set_taint(arg->dst,l5); // eax part of mul/div
 
-    set_flags(arg->flags,l4);
+            set_taint(arg->src3,l6); // edx part of mul/div
+
+            set_flags(arg->flags,l5);
+        }
+    }
 
     OUTPUT_ERROR(err,arg,cb3_debug);
 }
@@ -432,8 +447,22 @@ static inline const char *mem_text(x86_op_mem *eff_addr, u16 size, u8 add_pref){
 }
 
 
+typedef struct {
+    u64 operand;
+    enum shadow_type type;
+    void *label; //the memory placeholder for the value, needed for operand initialization
+    u16 size;
+} asm_operand_dup;
+
+typedef struct {
+    asm_operand_dup operands[8];
+    u8 num_operands;
+} multiple_operands_dup; //would be assigned to a UNION_MULTIPLE_OPS
+
 static inline const char *op_text(enum shadow_type type, uint64_t operand, u16 size, u8 add_pref){
+    const char *str=NULL;
     switch(type){
+//        case GLOBAL_IMPLICIT: //later, we can print for slice graph but not for asm
         case GLOBAL:
             if(operand<=R_HIGH){
                 return get_qemu_reg_name(operand,size);
@@ -443,10 +472,28 @@ static inline const char *op_text(enum shadow_type type, uint64_t operand, u16 s
             }
         case IMMEDIATE:
             sprintf(imm_buffer,"0x%lx",operand);
+            str = (const char *)imm_buffer;
             break;
-        case MULTIPLE_OPS: //not yet handled at ASM generation
-            sprintf(imm_buffer,"%s","MULTIOPS");
+        case MULTIPLE_OPS:
+        {
+            if(operand==0){
+                sprintf(imm_buffer,"%s","MULTIOPS");
+            }
+            else{
+                multiple_operands_dup *mulOps = (multiple_operands_dup *)operand;
+                for (int i=0;i<mulOps->num_operands;i++){
+                        const char *tmp = op_text(mulOps->operands[i].type,mulOps->operands[i].operand,mulOps->operands[i].size,1);
+                        if(tmp!=NULL){
+                            if(str!=NULL){
+                                sprintf(imm_buffer,"%s, %s",str, imm_buffer);
+                            }
+                            str = strdup(imm_buffer);
+                        }
+                }
+            }
             break;
+        }
+//        case MEMORY_IMPLICIT:
         case MEMORY:
         case EFFECTIVE_ADDR:
             if(operand!=0){
@@ -455,15 +502,16 @@ static inline const char *op_text(enum shadow_type type, uint64_t operand, u16 s
             else{
                 sprintf(imm_buffer,"%s",type==MEMORY?"[MEMORY]":"[$EFF_ADDR]");
             }
+            str = (const char *)imm_buffer;
             break;
         default:
             return NULL;
     }
-    return (const char*)imm_buffer;
+    return str;
 }
 
 static const char *print_load(inst *instruction){
-    const char *format = "%s";
+    const char *format = "%s %s";
     const char *op2=NULL;
     const char *op1=NULL;
     switch (instruction->op){
@@ -483,14 +531,14 @@ static const char *print_load(inst *instruction){
             inst_buffer[0] = '\0'; //for the second sprintf
             op2 = op_text(instruction->op2_type,instruction->op2,instruction->size,0);
             if(op2!=NULL){
-                sprintf(inst_buffer,format,op2);
+                sprintf(inst_buffer,format,inst_buffer,op2);
                 format = "%s, %s";
             }
             op1 = op_text(instruction->op1_type,instruction->op1,instruction->size,0);
             if(op1!=NULL){
                 sprintf(inst_buffer,format,inst_buffer,op1);
             }
-//            printf("op1=%llu, op2=%llu, operands=%s",instruction->op1,instruction->op2,inst_buffer);
+//            printf("op1=%llu, op1_type=%d, op2=%llu, op2_type=%d, operands=%s\n",instruction->op1,instruction->op1_type,instruction->op2,instruction->op2_type,inst_buffer);
             break;
         case EFFECTIVE_ADDR_UNION:
             sprintf(inst_buffer,"left (base+disp) + right (scale*index)\n");
@@ -527,6 +575,9 @@ static const char *print_X86_instruction(inst *instruction){
     int conv_size = instruction->size;
     u8 add_pref = 1;
     if((instruction->op==X86_INS_MOVZX || instruction->op==X86_INS_MOVSX || instruction->op==X86_INS_MOVSXD)){ //handling size conversion
+        if(instruction->op==X86_INS_MOVSX && instruction->size==8){
+            instruction->op=X86_INS_MOVSXD; //to fix an inconsistency between nasm, capstone and keystone that wouldn't accept X86_INS_MOVSX for 64 bits
+        }
         if(instruction->size_src<instruction->size){
             conv_size = instruction->size_src;
         }

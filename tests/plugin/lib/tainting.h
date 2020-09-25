@@ -87,7 +87,7 @@ g_autofree gchar *o2 = g_strdup_printf("SHADOW error in %s inst callback#\topera
 qemu_plugin_outs(o2);}
 
 #else
-#define DEBUG_OUTPUT(arg, inst_s) //printf("%s\n",inst_s);
+#define DEBUG_OUTPUT(arg, inst_s) //printf(" %s calling,param=%s...\n",__FUNCTION__,%s);
 #define OUTPUT_ERROR(err, arg, inst_s) if (err){\
 ;}
 #endif

@@ -511,11 +511,11 @@ shadow_err check_registers(uint64_t start, uint64_t end) {
 }
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE void
-mark_input_bytes(void *addr, int64_t ret, uint8_t value) {
+mark_input_bytes(void *addr, int64_t ret, uint8_t invok) { //invok is not currently used but it should be useful for interactive apps
 //    char *desc = malloc(20);
 //    sprintf(desc,"%d",value);
-    dfsan_label label = dfsan_create_label(value);
     for (int i = 0; i < ret; i++) {
+        dfsan_label label = dfsan_create_label(invok+i);
         dfsan_set_label(label, addr + i, 1);
     }
 //    printf("exiting mark_input\n");

@@ -300,11 +300,16 @@ void plugin_reg_read(uint32_t reg, int len, void *buf)
     }
 
     else{ //high parts of the general registers see i386/translate and access to AH for an example
-        if (qreg>15 && qreg<20){
-            qreg -=16;
-            shift = 1;
+        if(qreg==100){ //not a good idea but right now it's hardcoded
+            value = cpu->eflags;
         }
-        value = (uint64_t)cpu->regs[qreg];
+        else{
+            if (qreg>15 && qreg<20){
+                qreg -=16;
+                shift = 1;
+            }
+            value = (uint64_t)cpu->regs[qreg];
+        }
     }
 //    printf("value=%lx, reg=%d qreg=%d\n",value,reg,qreg);
 #endif
@@ -325,6 +330,7 @@ void plugin_reg_read(uint32_t reg, int len, void *buf)
             *(uint64_t*)buf = value;
             break;
         default:
+            printf("size for reg_read is not supported=%d\n",len);
             assert(0);
     }
 }

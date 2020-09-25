@@ -1,6 +1,7 @@
 //
 // Created by sina on 2020-09-18.
 //
+#include "defs.h"
 #define CONCAT_HELPER_NAME "concat_func"
 #define TRUNC_HELPER_NAME "truncate_func"
 #define CONCAT_HELPER_CODE "push    rbp;mov     rbp, rsp;mov     [rbp-18h], rdi;mov     [rbp-28h], rdx;mov     eax, ecx;\

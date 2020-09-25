@@ -31,6 +31,14 @@
 #define IS_MEMORY(X) ((((u16)X)==((u16)MEMORY)) || (((u16)X)==((u16)MEMORY_IMPLICIT)))
 #define IS_GLOBAL(X) ((((u16)X)==((u16)GLOBAL)) || (((u16)X)==((u16)GLOBAL_IMPLICIT)))
 
+#ifndef GLOBAL_POOL_SIZE
+#ifdef X86_REG_ENDING
+#define GLOBAL_POOL_SIZE X86_REG_ENDING + 20 //Capstone has 234 X86 registers, we allocate a few more for temps
+#else
+#define GLOBAL_POOL_SIZE 254
+#endif
+#endif
+
 typedef unsigned long uptr;
 typedef uint32_t dfsan_label;
 

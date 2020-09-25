@@ -168,7 +168,7 @@ static void plugin_exit(qemu_plugin_id_t id, void *p)
     int root = dfsan_fini(label_file, graph_file);
 
     dfsan_graphviz(root,graph_file);
-    generate_asm(root);
+    generate_asm_func(root);
     print_asm_instructions();
 
     g_autoptr(GString) end_rep = g_string_new("\n");
@@ -190,7 +190,7 @@ printf("debugging information for 2nd code cache optimization would not be print
     unsupported_ins_log =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
     syscall_rets =  g_hash_table_new_full(NULL, g_direct_equal, NULL, NULL);
 
-    init_asm_generation(16);
+    init_asm_generation(8);
     init_register_mapping();
     dfsan_init(&config);
     printInst = &print_X86_instruction;
@@ -236,9 +236,9 @@ static void syscall_ret_callback(qemu_plugin_id_t id, unsigned int vcpu_idx, int
         g_string_append_printf(out,"\tTainting syscall num: %"PRIu64, num);
         uint64_t *addr = g_hash_table_lookup(syscall_rets, (gpointer)num);
         if(addr!=NULL){
-            invocation_counter++;
             //create a label per byte
             mark_input_bytes((void *)*addr, ret, invocation_counter);
+            invocation_counter+=ret;
             int removed = g_hash_table_remove(syscall_rets, (gpointer)num);
             g_assert(removed);
             g_string_append_printf(out,"\t addr=0x%"PRIx64"\tret=%"PRIu64" is done.\n",*addr,ret);
@@ -280,6 +280,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 
         cb_args = analyze_Operands(inst_det->operands,inst_det->op_count);
         cb_args->operation = cs_ptr->id; //sina: record the instruction ID as it appears
+        assert(cs_ptr->id!=0);
 
 #if 0 //testing implicit registers
         int rr=cs_ptr->detail->regs_read_count;
@@ -430,7 +431,8 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
             case X86_INS_CWDE:
             case X86_INS_CDQE: //cltq, propagates from EAX to RAX but we track the entire RAX
                 // we track the entire RAX
-                ALLOC_SET0(cb_args,inst_callback_argument)
+                memset(cb_args,0,sizeof(inst_callback_argument));
+                cb_args->operation = cs_ptr->id;
                 cb_args->src.type = GLOBAL_IMPLICIT;
                 cb_args->src.addr.id = R_EAX;
                 switch (cs_ptr->id){
@@ -506,7 +508,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb_args->src3.size = cb_args->src.size;
                 cb_args->dst.type = GLOBAL_IMPLICIT;
                 cb_args->dst.addr.id = MAP_X86_REGISTER(X86_REG_RAX);
-                cb_args->dst.size = 2*(cb_args->src.size);
+                cb_args->dst.size = cb_args->src.size;
 
                 cb_args->flags.addr.id=FLAG_REG;
                 cb_args->flags.type=GLOBAL;
@@ -518,8 +520,8 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cb = taint_cb_effmem;
                 break;
             case X86_INS_SYSCALL: //tainting input is handled in system call cb
-                ALLOC_SET0(cb_args,inst_callback_argument)
-
+                memset(cb_args,0,sizeof(inst_callback_argument));
+                cb_args->operation = X86_INS_SYSCALL;
                 cb_args->src.addr.id=MAP_X86_REGISTER(X86_REG_RCX);
                 cb_args->src.type=GLOBAL_IMPLICIT;
                 cb_args->src.size=SHD_SIZE_u64;
@@ -560,7 +562,8 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
                 cbType = BEFORE;
                 break;
             case X86_INS_LEAVE:
-            ALLOC_SET0(cb_args,inst_callback_argument)
+                memset(cb_args,0,sizeof(inst_callback_argument));
+                cb_args->operation = X86_INS_LEAVE;
                 cb_args->src.type = MEMORY_IMPLICIT;
                 cb_args->src.size = SHD_SIZE_u64;
 
@@ -694,6 +697,7 @@ static void vcpu_tb_trans(qemu_plugin_id_t id, struct qemu_plugin_tb *tb)
 //#define cmp_src_dst_size(ssize,dsize,op) if(ssize!=dsize){printf("mem_size=%d, dst_size=%d, op=%s\n",ssize,dsize,get_inst_name(op));}
         if (cb_args!=NULL){
             //usr_data should be allocated
+//            assert(cb_args->operation!=0);
             usr_data = (void*)cb_args;
             if (cb_args->src.type == MEMORY || cb_args->src.type == MEMORY_IMPLICIT){ //for instance Pop
                 ALLOC_SET0(mem_cb_arg,mem_callback_argument)
