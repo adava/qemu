@@ -27,7 +27,7 @@ mov	 ecx, dword ptr[rsp-36]
 mov	 rsi, qword ptr[rsp-44]
 add	 rsi, rcx
 mov	 qword ptr[rsp-52], rsi
-mov	 qword ptr[rsp-60], 0x202
+mov	 qword ptr[rsp-60], 0x246
 mov	 rsi, qword ptr[rsp-52]
 mov	 ah, byte ptr[rsp-60]
 sahf

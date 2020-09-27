@@ -301,7 +301,7 @@ void plugin_reg_read(uint32_t reg, int len, void *buf)
 
     else{ //high parts of the general registers see i386/translate and access to AH for an example
         if(qreg==100){ //not a good idea but right now it's hardcoded
-            value = cpu->eflags;
+            value = cpu_compute_eflags(cpu);
         }
         else{
             if (qreg>15 && qreg<20){
