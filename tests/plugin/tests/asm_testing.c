@@ -179,7 +179,7 @@ void stub_func(char *input, int num_bytes, void *gen_asm_ptr){ //if input is lar
 }
 
 int test_sample_slice(){
-    const char *asm_file = "sample_generated_asm";
+    const char *asm_file = "sample_generated_asm.asm";
     struct stat st;
     int fd_asm = open(asm_file, O_RDWR);
     if (fd_asm == -1){

@@ -1,9 +1,11 @@
 //
 // Created by sina on 2020-09-18.
 //
+#ifndef ASM_GEN_H
+#define ASM_GEN_H
 #include "defs.h"
-#define CONCAT_HELPER_NAME "concat_func"
-#define TRUNC_HELPER_NAME "truncate_func"
+#define CONCAT_HELPER_NAME "concat_func" //this should be here but the acutall helper logic could be moved to the bin_gen
+#define TRUNC_HELPER_NAME "truncate_func" //this should be here but the acutall helper logic could be moved to the bin_gen
 #define CONCAT_HELPER_CODE "push    rbp;mov     rbp, rsp;mov     [rbp-18h], rdi;mov     [rbp-28h], rdx;mov     eax, ecx;\
                             mov     edx, r8d;mov     [rbp-38h], r9;mov     [rbp-1ch], si;mov     [rbp-20h], ax;mov     [rbp-2ch], dx;\
                             movzx   eax, word ptr [rbp-1ch];shl     eax, 3;mov     rdx, [rbp-28h];mov     ecx, eax;shl     rdx, cl;\
@@ -32,14 +34,26 @@
 
 #define HELPERS CONCAT_HELPER_NAME":"CONCAT_HELPER_CODE""TRUNC_HELPER_NAME":"TRUNC_HELPER_CODE
 
+typedef struct {
+    u64 operand;
+    enum shadow_type type;
+    void *label; //the memory placeholder for the value, needed for operand initialization
+    u16 size;
+} asm_operand;
+
+typedef struct {
+    asm_operand operands[8];
+    u8 num_operands;
+} multiple_operands; //would be assigned to a UNION_MULTIPLE_OPS
 
 //void *callHelperTruncate(u64 operand, u16 orig_size, u16 trunc_size);
 //
 //void *callHelperConcat(u64 op1, u16 op1_size, u64 op2, u16 op2_size,u16 concat_size);
 
-//void generate_asm(int root);
+void generate_asm(int root);
 
-int dfsan_graphviz_traverse(dfsan_label root, FILE *vz_fd, int i);
+void generate_asm_func(int root);
 
 void dfsan_graphviz(dfsan_label root, char *graph_file);
 
+#endif

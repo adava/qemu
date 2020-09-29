@@ -34,6 +34,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include "asm_generation.h"
+#include "asm_output.c"
 #include "../../../../capstone/include/x86.h"
 #include "../../../../capstone/include/capstone.h"
 //#include "../tainting.h"
@@ -46,18 +47,6 @@
 #define MAKE_EXPLICIT(X) X=(((u16)X==(u16)GLOBAL_IMPLICIT || (u16)X==(u16)MEMORY_IMPLICIT))?(enum shadow_type)((u16)X-1):X
 
 print_instruction printInst;
-
-typedef struct {
-    u64 operand;
-    enum shadow_type type;
-    void *label; //the memory placeholder for the value, needed for operand initialization
-    u16 size;
-} asm_operand;
-
-typedef struct {
-    asm_operand operands[8];
-    u8 num_operands;
-} multiple_operands; //would be assigned to a UNION_MULTIPLE_OPS
 
 //We mostly use the instruction pointers in the labels, and place the missing pieces like the effective_addr, memory addresses and multiple_ops.
 //We would still need more instructions for helper calls and data movements that we generate and add
@@ -406,7 +395,7 @@ static inline void create_instruction_label(dfsan_label_info *label) {
 }
 
 //TODO: still not sure if propagation for EFLAGS is done correctly
-static void generate_asm(int root) {
+void generate_asm(int root) {
     struct dfsan_label_info *label = dfsan_get_label_info(root);
     if (label->label_mem != 0) {
         return; //we already evaluated this label, in another subtree; just use the value stored in label_mem
@@ -491,7 +480,7 @@ static void generate_asm(int root) {
     }
 }
 
-static void generate_asm_func(int root){
+void generate_asm_func(int root){
     //add prologue here
     generate_asm(root);
     //add epilogue here
@@ -516,7 +505,7 @@ static void print_asm_instructions(void){
 
 //in order to generate the tree graph, install graphviz and run: dot -Tpng ./union_graphviz.gv -o union-sample.png
 
-int dfsan_graphviz_traverse(dfsan_label root, FILE *vz_fd, int i) {
+static int dfsan_graphviz_traverse(dfsan_label root, FILE *vz_fd, int i) {
     int prev_i = 0;
     if (root != CONST_LABEL) {
         dfsan_label_info *label = (dfsan_label_info *) dfsan_get_label_info(root);
