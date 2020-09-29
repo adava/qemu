@@ -4,7 +4,7 @@
 
 /* For testing, follow these steps:
  * Install Keystone
- * gcc  -o asm_testing.o asm_testing.c -lkeystone -lstdc++ -lm
+ * gcc  -o bin_testing.o bin_testing.c -lkeystone -lstdc++ -lm
 */
 
 #include <assert.h>
@@ -63,7 +63,7 @@ void test_helper_calls(){
     close(fd);
 }
 
-void test_sample_slice(char *asm_file){
+void test_sample_slice(char *asm_file, unsigned long int expected_value){
     long long unsigned int ret = 0;
     int st_size=0;
     size_t assembled_bytes_size=0;
@@ -81,10 +81,15 @@ void test_sample_slice(char *asm_file){
     char input[8]={'K','\0','4','\0','\0','\0','\0','\0'}; //since we set 8 for init_asm_generation, and my system allocates 2 bytes per input char
     ret = exec_addr(input,8);
     printf("ret=%llx\n",ret);
-    assert(ret==0); //for sample_generated_asm.asm, the ret should be zero
+    assert(ret==expected_value); //for sample_generated_asm.asm, the ret should be zero
 }
 
-void main(){
+void main(int argc, char *argv[]){
     test_helper_calls();
-    test_sample_slice("sample_generated_asm.asm");
+    if(argc>2){
+        test_sample_slice(argv[1],atoi(argv[1]));
+    }
+    else{
+        test_sample_slice("sample_generated_asm.asm",0);
+    }
 }

@@ -47,6 +47,7 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_version = QEMU_PLUGIN_VERSION;
 
 static char *label_file=NULL;
 static char *graph_file=NULL;
+static char *asm_file=NULL;
 //static char *asm_file="program_asm.txt";
 static bool verbose;
 GHashTable *unsupported_ins_log;
@@ -168,9 +169,10 @@ static void plugin_exit(qemu_plugin_id_t id, void *p)
     int root = dfsan_fini(label_file, graph_file);
 
     dfsan_graphviz(root,graph_file);
-    generate_asm_func(root);
-    print_asm_instructions();
-
+    generate_asm_body(root);
+    if(asm_file!=NULL){
+        print_asm_slice_function(asm_file);
+    }
     g_autoptr(GString) end_rep = g_string_new("\n");
     print_unsupported_ins(end_rep,unsupported_ins_log);
     g_string_append_printf(end_rep, "Done\n");
@@ -782,7 +784,11 @@ QEMU_PLUGIN_EXPORT int qemu_plugin_install(qemu_plugin_id_t id,
         }
         else if (i == 1) {
             graph_file = strdup(p);
-        } else if (strcmp(p, "verbose") == 0) {
+        }
+        else if (i == 2) {
+            asm_file = strdup(p);
+        }
+        else if (strcmp(p, "verbose") == 0) {
             verbose = true;
         }
     }

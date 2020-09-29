@@ -11,7 +11,7 @@ inc rdi
 inc rsp
 mov al, byte ptr [rdi-1]
 mov byte ptr [rsp-1], al
-inc ecx
+inc rcx
 jmp Copy_input
 Slice_code: ;the slice can assume the esp to esp + size have the input
 

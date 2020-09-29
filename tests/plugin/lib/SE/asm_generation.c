@@ -480,27 +480,36 @@ void generate_asm(int root) {
     }
 }
 
-void generate_asm_func(int root){
-    //add prologue here
+void generate_asm_body(int root){
     generate_asm(root);
-    //add epilogue here
     if(STACK_TOP!=NULL){ //return value that is that last label value
-        create_instruction((u64)STACK_TOP, MEMORY, 0, UNASSIGNED, R_EAX, GLOBAL, stack_top_size, X86_INS_MOV, stack_top_size);
+        create_instruction((u64)STACK_TOP, MEMORY, 0, UNASSIGNED, R_EAX, GLOBAL, stack_top_size, X86_INS_MOV, stack_top_size); //separate from epilogue because depends on the STACK_TOP that we don't have before hand
     }
-
-    create_instruction(0, UNASSIGNED, 0, UNASSIGNED, 0, UNASSIGNED, 1, X86_INS_RET, 1);
 }
 
-static void print_asm_instructions(void){
+void print_asm_slice_function(const char *file_name){
+    int fd = open(file_name, O_RDWR|O_CREAT,0777);
+    if (fd == -1){
+        printf("error openning file in printing slice_function:%s\n",file_name);
+        assert(0);
+    }
+    ftruncate(fd,0);
+    //print prologue, copies the input into the local stack
+    write(fd,SLICE_PROLOGUE,strlen(SLICE_PROLOGUE));
     for(inst_list *temp=instructions_head;temp!=NULL;temp=temp->next_inst){
         const char *asm_ins_txt=print_X86_instruction(temp->ins);
         if(asm_ins_txt!=NULL){
+            write(fd, asm_ins_txt, strlen(asm_ins_txt));
+            write(fd, "\n", 1);
             printf("%s\n",asm_ins_txt);
         }
         else{
             printf("WARNING: Instruction text for op=%d, op1=%llx, op2=%llx, dest=%llx, was %p\n",temp->ins->op, temp->ins->op1, temp->ins->op2, temp->ins->dest,asm_ins_txt);
         }
     }
+    //print epilogue
+    write(fd,SLICE_EPILOGUE,strlen(SLICE_EPILOGUE));
+    close(fd);
 }
 
 //in order to generate the tree graph, install graphviz and run: dot -Tpng ./union_graphviz.gv -o union-sample.png
