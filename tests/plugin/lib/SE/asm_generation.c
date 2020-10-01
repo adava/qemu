@@ -74,6 +74,9 @@ u16 stack_top_size=0;
 void *CONCAT_HELPER; //func(op1,op1_size,op2,op2_size,concat_size,retaddr) shift op1 op1_size left, and 'or' it with op2 shifted right op2_size. Copy the result to retaddr.
 void *TRUNCATE_HELPER; //func(op,orig_size,trunc_size,retaddr) that would shift operand orig_size-trunc_size left, then shift back right. Copy the result to retaddr.
 
+u8 place_concat_helper=0;
+u8 place_trunc_helper=0;
+
 // +--------------------+
 // |    Past frames     |
 // |                    |
@@ -273,7 +276,7 @@ static void *callHelperTruncate(u64 operand, u16 orig_size, u16 trunc_size) {
                        CALL_HELPER, 2); //should be a call to a relative address
     //Decrement the stack pointer
     create_instruction(0-STACK_CURRENT_OFFSET+stack_top_size, IMMEDIATE, R_ESP, GLOBAL, R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_ADD, 8); // so we can use the offseteting again
-
+    place_trunc_helper = 1;
     return res;
 }
 
@@ -293,6 +296,7 @@ static void *callHelperConcat(u64 op1, u16 op1_size, u64 op2, u16 op2_size, u16 
                        CALL_HELPER, 2); //should be a call to a relative address
     //Decrement the stack pointer
     create_instruction(0-STACK_CURRENT_OFFSET+stack_top_size, IMMEDIATE, R_ESP, GLOBAL, R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_ADD, 8); // so we can use the offseteting again
+    place_concat_helper=1;
     return res;
 }
 
@@ -482,6 +486,8 @@ void generate_asm(int root) {
 }
 
 void generate_asm_body(int root){
+    place_concat_helper = 0;
+    place_concat_helper = 0;
     generate_asm(root);
     if(STACK_TOP!=NULL){ //return value that is that last label value
         create_instruction((u64)STACK_TOP, MEMORY, 0, UNASSIGNED, R_EAX, GLOBAL, stack_top_size, X86_INS_MOV, stack_top_size); //separate from epilogue because depends on the STACK_TOP that we don't have before hand
@@ -510,6 +516,13 @@ void print_asm_slice_function(const char *file_name){
     }
     //print epilogue
     write(fd,SLICE_EPILOGUE,strlen(SLICE_EPILOGUE));
+    if(place_concat_helper){
+        printf("%s",HELPER_CONCAT);
+        write(fd,HELPER_CONCAT,strlen(HELPER_CONCAT));
+    }
+    if(place_trunc_helper){
+        write(fd,HELPER_TRUNC,strlen(HELPER_TRUNC));
+    }
     close(fd);
 }
 
