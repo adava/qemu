@@ -99,9 +99,9 @@ static inline const char *op_text(enum shadow_type type, uint64_t operand, u16 s
                     const char *tmp = op_text(mulOps->operands[i].type,mulOps->operands[i].operand,mulOps->operands[i].size,1);
                     if(tmp!=NULL){
                         if(str!=NULL){
-                            sprintf(imm_buffer,"%s, %s",str, imm_buffer);
+                            sprintf(imm_buffer,"%s, %s",str, tmp);
                         }
-                        str = strdup(imm_buffer);
+                        str = strdup(tmp);
                     }
                 }
             }

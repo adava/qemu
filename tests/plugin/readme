@@ -1,0 +1,15 @@
+Compile Qemu (root folder):
+    ./configure --target-list=x86_64-linux-user --enable-plugins --enable-debug --enable-kvm
+    make
+Compile plugins (this folder):
+    make
+Execution:
+    ./x86_64-linux-user/qemu-x86_64 -d plugin -D ../SE_logs/plugin_logs/SE_conv.log  -plugin tests/plugin/libSE_labels.so,arg=../SE_logs/label_logs/conv_labels.txt,arg=../SE_logs/slices/conv_graph.vz,arg=./tests/plugin//tests/plugin_asm.asm ./convsize.o
+
+To visualize the slice:
+    dot -Tpng ../SE_logs/slices/asm_graph_testing.vz -o ../SE_logs/slices/asm_graph_testing.png
+Testing the generated assembly for the slice:
+    cd tests
+    gcc  -o bin_testing.o bin_testing.c -lkeystone -lstdc++ -lm
+    ./bin_testing.o plugin_asm.asm 0
+

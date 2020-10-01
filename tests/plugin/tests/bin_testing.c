@@ -37,10 +37,10 @@
 char slice_inputs[32]={'\0'};
 
 void test_helper_calls(){
-    int fd=initialize_executable_file(SLICE_EXEC_FILE);
-
     unsigned char *encode=NULL;
     size_t size = 0; //num of compiled bytes as  returned by keystone
+    printf("CONCAT_HELPER:\n");
+    printf("%s",CONCAT_HELPER_CODE);
     concat_func = assemble_and_write(encode, &size,CONCAT_HELPER_CODE);
     long long unsigned int new_op=0;
     long long unsigned int op1 = 0xf000bc;
@@ -53,6 +53,8 @@ void test_helper_calls(){
     printf("current code_gen_index=%d\n",code_gen_index);
     encode = NULL;
     size = 0;
+    printf("TRUNC_HELPER:\n");
+    printf("%s",TRUNC_HELPER_CODE);
     assemble_and_write(encode, &size,TRUNC_HELPER_CODE);
     trunc_func = (void *)&(((unsigned char *)code_gen_mmap)[trunc_index]);
     printf("Executing the assembled instructions for trunc...\n");
@@ -60,7 +62,6 @@ void test_helper_calls(){
     trunc_func(op1,4,2,(void *)&new_op);
     printf("truncating 4 bytes of 0x%llx to 2 bytes => new_op=%llx\n",op1,new_op);
     assert(new_op==0xbc);
-    close(fd);
 }
 
 void test_sample_slice(char *asm_file, unsigned long int expected_value){
@@ -76,20 +77,28 @@ void test_sample_slice(char *asm_file, unsigned long int expected_value){
     }
     printf("\n");
 
-    printf("Executing the assembled instructions for the sample slice...\n");
+    if(assembled_bytes_size>0){
+        printf("Executing the assembled instructions for the sample slice, expected value=%lu...\n",expected_value);
 
-    char input[8]={'K','\0','4','\0','\0','\0','\0','\0'}; //since we set 8 for init_asm_generation, and my system allocates 2 bytes per input char
-    ret = exec_addr(input,8);
-    printf("ret=%llx\n",ret);
-    assert(ret==expected_value); //for sample_generated_asm.asm, the ret should be zero
+        char input[8]={'K','\0','4','\0','\0','\0','\0','\0'}; //since we set 8 for init_asm_generation, and my system allocates 2 bytes per input char
+        ret = exec_addr(input,8);
+        printf("ret=%llx\n",ret);
+        assert(ret==expected_value); //for sample_generated_asm.asm, the ret should be zero
+
+    }
+    else{
+        printf("ERROR in assembling, no bytes were assembled\n");
+    }
 }
 
 void main(int argc, char *argv[]){
+    int fd=initialize_executable_file(SLICE_EXEC_FILE);
     test_helper_calls();
     if(argc>2){
-        test_sample_slice(argv[1],atoi(argv[1]));
+        test_sample_slice(argv[1],atoi(argv[2]));
     }
     else{
         test_sample_slice("sample_generated_asm.asm",0);
     }
+    close(fd);
 }

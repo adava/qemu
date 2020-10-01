@@ -44,6 +44,7 @@ int initialize_executable_file(char *file_name){
 }
 
 void* assemble_and_write(unsigned char *encode, size_t *size, char *CODE){ //*encode is for further reference, the executable is at code_gen_mmap
+    void *ret = &((unsigned char *)code_gen_mmap)[code_gen_index];
     ks_engine *ks;
     ks_err err;
     size_t count; // num of statements as returned by keystone
@@ -57,6 +58,7 @@ void* assemble_and_write(unsigned char *encode, size_t *size, char *CODE){ //*en
     if (ks_asm(ks, CODE, 0, &encode, size, &count) != KS_ERR_OK) {
         printf("ERROR: ks_asm() failed & count = %lu, error = %s\n",
                count, ks_strerror(ks_errno(ks)));
+        assert(0);
     } else {
         printf("successfully assembled, size=%lu!,count=%lu %p\n",*size,count,encode);
         for (int i = 0; encode!=NULL && (i < *size); i++) {
@@ -65,7 +67,7 @@ void* assemble_and_write(unsigned char *encode, size_t *size, char *CODE){ //*en
         }
         printf("\n");
     }
-    return code_gen_mmap;
+    return ret;
 }
 //returns a pointer to the executable slice, see slice_func type
 void* executable_from_asm(char *asm_file, char **asm_code, int *asm_code_size, size_t *assembled_size){

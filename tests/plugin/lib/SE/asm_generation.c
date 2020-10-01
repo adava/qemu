@@ -267,12 +267,12 @@ static void *callHelperTruncate(u64 operand, u16 orig_size, u16 trunc_size) {
     copy_parameter_n(3, trunc_size, IMMEDIATE, 8, 0);
     copy_parameter_n(4, (u64) res, MEMORY, 8, 1); //this parameter is a pointer, so LEA is needed.
     //Increment the stack pointer
-    create_instruction(-STACK_CURRENT_OFFSET, IMMEDIATE, R_ESP, GLOBAL,  R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_ADD, 8); // current local vars plus an extra 8 bytes (eip but I could be wrong), so the callee can use the top of the stack
+    create_instruction(0-STACK_CURRENT_OFFSET+stack_top_size, IMMEDIATE, R_ESP, GLOBAL,  R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_SUB, 8); // current local vars plus an extra 8 bytes (eip but I could be wrong), so the callee can use the top of the stack
     //call
     create_instruction(0, UNASSIGNED, 0, UNASSIGNED, (u64) TRUNCATE_HELPER, IMMEDIATE, 2,
                        CALL_HELPER, 2); //should be a call to a relative address
     //Decrement the stack pointer
-    create_instruction(-STACK_CURRENT_OFFSET, IMMEDIATE, R_ESP, GLOBAL, R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_SUB, 8); // so we can use the offseteting again
+    create_instruction(0-STACK_CURRENT_OFFSET+stack_top_size, IMMEDIATE, R_ESP, GLOBAL, R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_ADD, 8); // so we can use the offseteting again
 
     return res;
 }
@@ -287,12 +287,12 @@ static void *callHelperConcat(u64 op1, u16 op1_size, u64 op2, u16 op2_size, u16 
     copy_parameter_n(5, concat_size, IMMEDIATE, 8, 0);
     copy_parameter_n(6, (u64) res, MEMORY, 8, 1);
     //Increment the stack pointer
-    create_instruction(-STACK_CURRENT_OFFSET, IMMEDIATE, R_ESP, GLOBAL,  R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_ADD, 8); // so the callee can use the top of the stack
+    create_instruction(0-STACK_CURRENT_OFFSET+stack_top_size, IMMEDIATE, R_ESP, GLOBAL,  R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_SUB, 8); // so the callee can use the top of the stack
     //call
     create_instruction(0, UNASSIGNED, 0, UNASSIGNED, (u64) CONCAT_HELPER, IMMEDIATE, 2,
                        CALL_HELPER, 2); //should be a call to a relative address
     //Decrement the stack pointer
-    create_instruction(-STACK_CURRENT_OFFSET, IMMEDIATE, R_ESP, GLOBAL, R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_SUB, 8); // so we can use the offseteting again
+    create_instruction(0-STACK_CURRENT_OFFSET+stack_top_size, IMMEDIATE, R_ESP, GLOBAL, R_ESP, GLOBAL_IMPLICIT, 8, X86_INS_ADD, 8); // so we can use the offseteting again
     return res;
 }
 
@@ -349,10 +349,11 @@ static inline void prepare_operand(dfsan_label label, u64 *op1, enum shadow_type
     dfsan_label_info *labelInfo = dfsan_get_label_info(label);
     u64 dest = labelInfo->instruction.dest;
     u16 dest_type = labelInfo->instruction.dest_type;
-    if (dest_type == MULTIPLE_OPS || dest_type == EFFECTIVE_ADDR) {
+    if (op1_type == MULTIPLE_OPS || op1_type == EFFECTIVE_ADDR) {
         assert(dest > 0);
         assert(dest_type == op1_type);
         *op1 = dest; //needed for the assembly text generation
+
         if(dest_type == MULTIPLE_OPS) {
             prep_mult_operand(dest,size); //prep each operand; needed for the data flow propagation
 

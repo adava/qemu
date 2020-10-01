@@ -142,7 +142,7 @@ static void taint_cb_3ops(unsigned int cpu_index, void *udata){
         }
         else{
             l4 = dfsan_union(l2, l3, UNION_MULTIPLE_OPS , arg->dst.size,
-                             arg->src2.addr.vaddr, arg->src3.addr.vaddr, arg->src2.type, arg->src3.type, 0, UNASSIGNED); //we need the union regardless of l2/l3 status because dst looks for multiple_ops
+                             arg->src2.addr.vaddr, arg->src3.addr.vaddr, arg->src2.type, arg->src3.type, 0, MULTIPLE_OPS); //we need the union regardless of l2/l3 status because dst looks for multiple_ops
             src_2_type = MULTIPLE_OPS;
             src2 = 0;
         }
@@ -171,10 +171,10 @@ static void taint_cb_effmem(unsigned int cpu_index, void *udata){
 
     if(l1!=CONST_LABEL || l2!=CONST_LABEL){
         l3 = dfsan_union(l1, CONST_LABEL, UNION_MULTIPLE_OPS , arg->dst.size,
-                         arg->src.addr.vaddr, arg->src3.addr.vaddr, arg->src.type, arg->src3.type, 0, UNASSIGNED); //we need the union regardless of l1 status because of MULTIPLE_OPS
+                         arg->src.addr.vaddr, arg->src3.addr.vaddr, arg->src.type, arg->src3.type, 0, MULTIPLE_OPS); //we need the union regardless of l1 status because of MULTIPLE_OPS
 
         l4 = dfsan_union(l2, CONST_LABEL, UNION_MULTIPLE_OPS , arg->dst.size,
-                         arg->src2.addr.vaddr, arg->src4.addr.vaddr, arg->src2.type, arg->src4.type, 0, UNASSIGNED); //we need the union regardless of l2 status
+                         arg->src2.addr.vaddr, arg->src4.addr.vaddr, arg->src2.type, arg->src4.type, 0, MULTIPLE_OPS); //we need the union regardless of l2 status
 
 
         l5 = dfsan_union(l3, l4, EFFECTIVE_ADDR_UNION, 0,
@@ -222,7 +222,7 @@ static void taint_cb_CMPCHG(unsigned int cpu_index, void *udata){
     dfsan_label xchg_label_dst = CONST_LABEL;
     if(l1!=CONST_LABEL || l2!=CONST_LABEL || l3!=CONST_LABEL) {
         dfsan_label l4 =  dfsan_union(l2, l3, UNION_MULTIPLE_OPS, arg->dst.size,
-                                        arg->dst.addr.vaddr, arg->src2.addr.id, arg->dst.type, arg->src2.type, 0, UNASSIGNED);
+                                        arg->dst.addr.vaddr, arg->src2.addr.id, arg->dst.type, arg->src2.type, 0, MULTIPLE_OPS);
         xchg_label_dst = dfsan_union(l1, l4, arg->operation, arg->src.size,
                                                arg->src.addr.vaddr, 0, arg->src.type, MULTIPLE_OPS, arg->dst.addr.vaddr,
                                      arg->dst.type); //Since multiple destinations, I'll make two unions with different destinations; there should always be a destination since we will not know where the label came from
@@ -275,7 +275,7 @@ static void taint_cb_MUL_DIV(unsigned int cpu_index, void *udata){
         }
         else{
             dfsan_label l4 = dfsan_union(l2, l3, UNION_MULTIPLE_OPS , arg->src2.size,
-                                         arg->src2.addr.vaddr, arg->src3.addr.vaddr, arg->src2.type, arg->src3.type, 0, UNASSIGNED); //we need the union regardless because even the constants are needed
+                                         arg->src2.addr.vaddr, arg->src3.addr.vaddr, arg->src2.type, arg->src3.type, 0, MULTIPLE_OPS); //we need the union regardless because even the constants are needed
 
             dfsan_label l5 =  dfsan_union(l1, l4, arg->operation, arg->dst.size,
                                           arg->src.addr.vaddr, 0, arg->src.type, MULTIPLE_OPS, arg->dst.addr.vaddr, arg->dst.type); //EAX part; EAX and EDX would be affected as destination
